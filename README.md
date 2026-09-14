@@ -76,6 +76,8 @@ One command. Give it the agent, the exact model, and the reasoning level:
 npm run benchmark:submit -- --harness pi-default --model PROVIDER/MODEL --thinking high --concurrency 10
 ```
 
+You can run that yourself, or hand your coding agent this repository link and let it do the work: the skills in `.agents/skills/` know how to route a harness to your account, run the observation, and open the pull request. Ask it to publish a result and it will use them.
+
 | Flag            | What it means                                                                              |
 | --------------- | ------------------------------------------------------------------------------------------ |
 | `--harness`     | The harness from the table above.                                                          |

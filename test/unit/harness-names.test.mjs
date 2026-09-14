@@ -10,7 +10,7 @@ const adapterIds = new Set(ADAPTER_IDS);
 
 /** Every document a reader can follow, because each of them names adapters. */
 async function documentedFiles() {
-  const files = ["README.md"];
+  const files = ["README.md", "AGENTS.md"];
   for (const directory of ["docs", ".agents/skills"]) {
     for (const entry of await readdir(path.join(repository, directory))) {
       if (directory === "docs" && entry.endsWith(".md")) files.push(path.join(directory, entry));
