@@ -186,10 +186,9 @@ const writeProgress = () => {
   checkpoint = checkpoint.then(() => json(path.join(root, "progress.json"), snapshot));
   return checkpoint;
 };
-// Trial state lives in the system temp folder, so a run leaves the checkout untouched.
-const stateRoot = path.join(os.tmpdir(), "explicit-edit-harness-state");
-await rm(stateRoot, { recursive: true, force: true });
-await mkdir(stateRoot, { recursive: true, mode: 0o700 });
+// Trial state lives in the system temp folder, so a run leaves the checkout untouched. The
+// directory belongs to this run alone: two runs at once must not delete each other's state.
+const stateRoot = await mkdtemp(path.join(os.tmpdir(), "explicit-edit-harness-state-"));
 async function lane() {
   while (next < schedule.length) {
     const item = schedule[next++],
@@ -326,6 +325,7 @@ async function lane() {
   }
 }
 await Promise.all(Array.from({ length: Math.min(concurrency, schedule.length) }, lane));
+await rm(stateRoot, { recursive: true, force: true });
 await json(path.join(root, "schedule.json"), schedule);
 await json(path.join(root, "summary.json"), {
   ...(retryFailures > 0 ? { retries: retrySummary(results, retryFailures) } : {}),

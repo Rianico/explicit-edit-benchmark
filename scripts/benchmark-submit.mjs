@@ -53,7 +53,6 @@ Adapter options:
   --provider-file FILE  provider and endpoint description
   --env-file FILE       local environment values
   --ide-package DIR     installed pi-agent-ide package
-  --ide-entry FILE      explicit extension entry
   --harness-version V   harness version (Pi Agent IDE)
   --runtime DIR         extra runtime mount, repeatable`;
 

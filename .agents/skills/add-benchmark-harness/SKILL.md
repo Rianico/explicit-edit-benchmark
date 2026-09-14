@@ -22,7 +22,7 @@ Add the smallest adapter that lets the existing runner call a new harness. Do no
 - **Private or experimental harness**: define it locally with `defineHarness({ createAdapter() })` in a config file. Nothing changes in the repository, and the contributor runs it with `npm run benchmark:submit -- --config FILE`.
 - **Harness that needs several steps** (start a server, spawn a worker thread, read a native timeline): copy `examples/bb/`. It holds a driver script, a timeline parser, and the config that ties them together, and it stays outside the built-in list because it is a starting point, not a verified family.
 - **Reusable harness**: add a built-in adapter. Four places know the adapter list, and all four change together:
-  - `scripts/prepare-benchmark.mjs`: the `makeAdapter` switch and the `PUBLIC_IDENTITIES` map, because `canonicalIdentity` rejects any name that is missing from that map;
+  - `scripts/prepare-benchmark.mjs`: the `makeAdapter` switch, the `ADAPTER_AGENT`, `ADAPTER_IDS`, and `ADAPTER_BINARIES` maps, and the `--harness` validator, because a name missing from them cannot resolve an agent or a binary;
   - the `--harness` help text in `scripts/prepare-benchmark.mjs`;
   - the ready adapter list in `usage` in `scripts/benchmark-submit.mjs`;
   - the adapter tables in `README.md` and `docs/running.md`.

@@ -230,6 +230,18 @@ const ADAPTER_AGENT = {
 /** Every adapter this benchmark can run, in the order the docs list them. */
 export const ADAPTER_IDS = Object.keys(ADAPTER_AGENT);
 
+/** The CLI each adapter runs when --command is not given. Two adapters may share one binary. */
+export const ADAPTER_BINARIES = {
+  "pi-default": "pi",
+  "pi-agent-ide": "pi",
+  "codex-cli-default": "codex",
+  "opencode-default": "opencode",
+  "oh-my-pi-default": "omp",
+  "github-copilot-cli-default": "copilot",
+  "dsh-standard": "dsh",
+  "dsh-code": "dsh",
+};
+
 function canonicalIdentity({ harness, model, thinking, version, provider, harnessVersion }) {
   const agentFamily = ADAPTER_AGENT[harness];
   if (!agentFamily)
@@ -581,13 +593,10 @@ async function main() {
     );
     return;
   }
-  const binary =
-    values.command ??
-    { "pi-default": "pi", "pi-agent-ide": "pi", "dsh-standard": "dsh", "dsh-code": "dsh" }[
-      values.harness
-    ] ??
-    values.harness;
-  if (!binary) throw Error("--harness is required");
+  if (!values.harness) throw Error("--harness is required");
+  const binary = values.command ?? ADAPTER_BINARIES[values.harness];
+  if (!binary)
+    throw Error(`No known binary for ${values.harness}; pass --command for the CLI to run`);
   const command = await realpath(
     binary.includes("/") ? binary : execFileSync("which", [binary], { encoding: "utf8" }).trim(),
   );

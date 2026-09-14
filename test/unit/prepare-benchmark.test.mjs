@@ -6,6 +6,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
+  ADAPTER_BINARIES,
+  ADAPTER_IDS,
   defaultConfigPath,
   makeAdapter,
   resolveIdePackage,
@@ -347,4 +349,12 @@ await test("a prepared config lands in the system temp folder, not in the checko
   } finally {
     await rm(defaultConfigPath, { force: true });
   }
+});
+
+await test("every adapter knows which CLI it runs", () => {
+  // Without this map the adapter name was used as the binary, so --harness codex-cli-default
+  // looked for a binary called codex-cli-default.
+  assert.deepEqual(Object.keys(ADAPTER_BINARIES).sort(), [...ADAPTER_IDS].sort());
+  for (const [adapter, binary] of Object.entries(ADAPTER_BINARIES))
+    assert.ok(binary && !binary.includes("-default"), `${adapter} must name a real binary`);
 });

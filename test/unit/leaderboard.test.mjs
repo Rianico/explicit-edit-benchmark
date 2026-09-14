@@ -21,6 +21,7 @@ const index = {
       definitions: {
         runner: { id: "explicit-edit-benchmark", version: "0.1.0" },
         benchmark: { id: "org/edit", version: "1" },
+        taskSet: { taskIds: ["replace-all-10-plain", "language-replace-10-typescript-plain"] },
       },
     },
   ],
@@ -400,13 +401,50 @@ await test("leaderboard data: scales a one-task perfect result by benchmark cove
     firstExactPassed: true,
     finalExactPassed: true,
   };
+  const completeIndex = {
+    runs: [
+      {
+        ...index.runs[0],
+        definitions: {
+          ...index.runs[0].definitions,
+          taskSet: { taskIds: Array.from({ length: 226 }, (_, task) => `task-${task}`) },
+        },
+      },
+    ],
+  };
   const row = aggregateLeaderboard(
-    index,
+    completeIndex,
     [...profiles, partialProfile],
     [...completeTrials, partialTrial],
     [],
   ).find((candidate) => candidate.configurationHash === "partial-config");
   assertMatchesObject(row, { qualityScore: 1, coverage: 1 / 226, score: 1 / 226 });
+});
+
+await test("leaderboard data: a partial run cannot look complete", () => {
+  const declared = {
+    runs: [
+      {
+        runId: "run-partial",
+        submissionId: "submission-partial",
+        contract: "edit-v1",
+        definitions: {
+          runner: { id: "explicit-edit-benchmark", version: "1" },
+          benchmark: { id: "org/edit", version: "1" },
+          // The bundle declares the whole benchmark, even though only one task has been run.
+          taskSet: { taskIds: Array.from({ length: 226 }, (_, index) => `task-${index}`) },
+        },
+      },
+    ],
+  };
+  const rows = aggregateLeaderboard(
+    declared,
+    [{ ...profiles[0], runId: "run-partial" }],
+    [{ ...trials[0], runId: "run-partial", firstExactPassed: true, finalExactPassed: true }],
+    [],
+  );
+  assertMatchesObject(rows[0], { taskCount: 1, benchmarkTaskCount: 226, complete: false });
+  assertCloseTo(rows[0].coverage, 1 / 226);
 });
 
 await test("describeDistribution: summarizes spread with quartiles instead of a single average", () => {

@@ -113,10 +113,6 @@ function metricState() {
   return { total: 0, observations: 0 };
 }
 
-function benchmarkKey(identity) {
-  return JSON.stringify([identity.benchmarkId, identity.benchmarkVersion]);
-}
-
 function taskResult() {
   return {
     observations: 0,
@@ -324,19 +320,6 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
     profiles.map((profile) => [`${profile.runId}::${profile.profileId}`, profile]),
   );
   const roundStats = new Map();
-  const benchmarkTasks = new Map();
-
-  for (const trial of trials) {
-    const run = runs.get(trial.runId);
-    if (!run) continue;
-    const family = taskFamily(trial.taskId);
-    if (!matchesFilter(family, filters.taskFamily)) continue;
-    const benchmark = run.definitions?.benchmark;
-    const key = JSON.stringify([benchmark?.id ?? run.contract, benchmark?.version ?? null]);
-    const tasks = benchmarkTasks.get(key) ?? new Set();
-    tasks.add(trial.taskId);
-    benchmarkTasks.set(key, tasks);
-  }
 
   for (const round of rounds) {
     const key = `${round.runId}::${round.trialId}`;
@@ -448,7 +431,12 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
         .filter((task) => task.duration.observations > 0)
         .map((task) => task.duration.total / task.duration.observations);
       const taskCount = group.tasks.size;
-      const benchmarkTaskCount = benchmarkTasks.get(benchmarkKey(group))?.size ?? taskCount;
+      // The benchmark size is what the run declared, not what has been run so far: a partial
+      // run must not look complete just because it is the only evidence so far.
+      const declaredSizes = [...group.runIds]
+        .map((runId) => runs.get(runId)?.definitions?.taskSet?.taskIds?.length)
+        .filter((size) => Number.isInteger(size) && size > 0);
+      const benchmarkTaskCount = declaredSizes.length ? Math.max(...declaredSizes) : taskCount;
       const qualityScore =
         firstExactRate == null || finalExactRate == null
           ? null
@@ -617,7 +605,7 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       trialSamples: group.rows.flatMap((row) => row.trialSamples ?? []),
       recoveryRounds: group.rows.reduce((total, row) => total + row.recoveryRounds, 0),
       taskCount: group.rows.reduce((total, row) => total + row.taskCount, 0),
-      benchmarkTaskCount: group.rows.reduce((total, row) => total + row.benchmarkTaskCount, 0),
+      benchmarkTaskCount: Math.max(...group.rows.map((row) => row.benchmarkTaskCount)),
       coverage,
       complete: coverage === 1,
       benchmarkFamilyCount: families.size,
