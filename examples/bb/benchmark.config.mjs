@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineBenchmarkConfig, defineHarness } from "../../scripts/benchmark-config.mjs";
+import { dependencyRoot } from "../../scripts/prepare-benchmark.mjs";
 import { inspectTimelineFile } from "./timeline.mjs";
 
 /**
@@ -58,13 +59,6 @@ const PROVIDER_AUTH = {
   "claude-code": "home/.claude/.credentials.json",
 };
 
-/** bb loads its own dependencies from the directory that holds it, so mount that whole tree. */
-function installRoot(packageDirectory) {
-  const marker = `${path.sep}node_modules${path.sep}`;
-  const index = packageDirectory.indexOf(marker);
-  return index < 0 ? packageDirectory : packageDirectory.slice(0, index + marker.length - 1);
-}
-
 const agentFamily = agentFamilyOverride ?? PROVIDER_AGENT[provider];
 const authDestination = PROVIDER_AUTH[provider];
 const authFile = process.env.BB_AGENT_AUTH;
@@ -111,7 +105,7 @@ const bb = defineHarness({
       model: selectedModel,
       thinking: model.thinking,
       ready: false,
-      readOnly: [installRoot(bbApp)],
+      readOnly: [dependencyRoot(bbApp)],
       seedFiles: {
         "bb/driver.mjs": fileURLToPath(new URL("./driver.mjs", import.meta.url)),
         [authDestination]: authFile,

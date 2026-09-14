@@ -63,7 +63,7 @@ Each adapter has its own quirks:
 - **Codex** writes its own `config.toml` and needs a Responses endpoint.
 - **Copilot** uses the current `COPILOT_PROVIDER_*` variables. BYOK runs are labelled `direct-completions`.
 - **DeepSeek Harness** needs a provider route: `dsh-standard` and `dsh-code` call a completions or catalog endpoint, so `--provider-file` is required. It writes its own `settings.yaml`. `dsh-standard` uses native tools, `dsh-code` uses PTC Code Mode. Both turn telemetry off and record the full SDK session event stream, which is what keeps same-session recovery working.
-- **Pi Agent IDE** loads the published `pi-agent-ide` npm package, so install it and pass `--ide-package DIRECTORY` pointing at the installed package. The adapter reads the extension entry and version from that package and mounts it read-only. `--harness-version` must equal the installed package version, otherwise the harness version would be confused with the Pi agent version.
+- **Pi Agent IDE** loads the published `pi-agent-ide` npm package, so install it and pass `--ide-package DIRECTORY` pointing at the installed package. The adapter reads the extension entry and version from that package and mounts the tree that holds it, so the extension's own dependencies come along. `--harness-version` must equal the installed package version, otherwise the harness version would be confused with the Pi agent version.
 
 ## Run a harness on your own subscription
 

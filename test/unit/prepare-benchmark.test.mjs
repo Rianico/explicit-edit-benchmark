@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   ADAPTER_BINARIES,
+  dependencyRoot,
   ADAPTER_IDS,
   defaultConfigPath,
   makeAdapter,
@@ -357,4 +358,10 @@ await test("every adapter knows which CLI it runs", () => {
   assert.deepEqual(Object.keys(ADAPTER_BINARIES).sort(), [...ADAPTER_IDS].sort());
   for (const [adapter, binary] of Object.entries(ADAPTER_BINARIES))
     assert.ok(binary && !binary.includes("-default"), `${adapter} must name a real binary`);
+});
+
+await test("a package is mounted with the dependencies installed beside it", () => {
+  // The IDE extension imports cross-spawn, which npm installs next to the package, not inside it.
+  assert.equal(dependencyRoot("/opt/app/node_modules/pi-agent-ide"), "/opt/app/node_modules");
+  assert.equal(dependencyRoot("/opt/standalone-package"), "/opt/standalone-package");
 });

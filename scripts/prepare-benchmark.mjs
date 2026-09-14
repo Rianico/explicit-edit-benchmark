@@ -57,6 +57,16 @@ function assertDeclaredIdeEntry(entry) {
     );
 }
 
+/**
+ * A package loads its dependencies from the tree that holds it. Mounting only the package
+ * directory leaves them behind, so a mount has to cover the whole `node_modules` tree.
+ */
+export function dependencyRoot(packageDirectory) {
+  const marker = `${path.sep}node_modules${path.sep}`;
+  const index = packageDirectory.indexOf(marker);
+  return index < 0 ? packageDirectory : packageDirectory.slice(0, index + marker.length - 1);
+}
+
 /** Resolve and validate a provider route without exposing its credential value. */
 export function resolveProviderRoute(provider, protocol, env) {
   if (!provider || typeof provider !== "object")
@@ -292,7 +302,7 @@ export function makeAdapter({
     thinking,
     transport: provider?.transport ?? "harness-native",
     ready: false,
-    readOnly: [...runtime, ...(idePackage ? [path.resolve(idePackage)] : [])],
+    readOnly: [...runtime, ...(idePackage ? [dependencyRoot(path.resolve(idePackage))] : [])],
     seedFiles: {},
     env: {},
   };
