@@ -39,9 +39,11 @@ The benchmark will keep growing: more tasks, more adapters, better analysis. If 
 - access to the model you want to test
 - a free [Hugging Face account](https://huggingface.co/join) to submit the result
 
-Install the benchmark and the Hugging Face CLI:
+Clone the repository, then install it and the Hugging Face CLI:
 
 ```sh
+git clone https://github.com/alexshpunt/explicit-edit-benchmark.git
+cd explicit-edit-benchmark
 npm ci
 python3 -m pip install --upgrade huggingface_hub
 hf auth login
