@@ -85,6 +85,10 @@ that one file into the sandbox; nothing else from your home directory is mounted
 the CLI with `--no-auto-update`, without built-in MCP servers, and without custom instructions, so
 the measurement stays with the harness rather than with whatever your global configuration adds.
 
+A plan or organization can block the Copilot CLI itself; the run then stops with
+`Access denied by policy settings`, which comes from GitHub, not from the benchmark. The BYOK route
+below is unaffected by that policy and is the way to measure such an account.
+
 ### Copilot with your own provider key (BYOK)
 
 This is how a subscription or a plan that only speaks the OpenAI wire protocol gets measured: point

@@ -365,3 +365,31 @@ await test("a package is mounted with the dependencies installed beside it", () 
   assert.equal(dependencyRoot("/opt/app/node_modules/pi-agent-ide"), "/opt/app/node_modules");
   assert.equal(dependencyRoot("/opt/standalone-package"), "/opt/standalone-package");
 });
+
+await test("every seeded file an adapter needs exists in the repository", async () => {
+  // A missing seed file only shows up when a run starts, so check the paths here instead.
+  const { existsSync } = await import("node:fs");
+  const { makeAdapter } = await import("../../scripts/prepare-benchmark.mjs");
+  // The IDE adapter needs an installed package; it seeds nothing without --auth-file anyway.
+  for (const harness of ADAPTER_IDS.filter((id) => id !== "pi-agent-ide")) {
+    const adapter = makeAdapter({
+      harness,
+      command: "/usr/bin/tool",
+      version: "test",
+      model: "provider/model-example",
+      thinking: "medium",
+      ...(harness === "dsh-standard" || harness === "dsh-code"
+        ? {
+            provider: {
+              id: "p",
+              apiKeyEnv: "P_KEY",
+              endpoints: { completions: "https://example.test" },
+            },
+            env: { P_KEY: "test" },
+          }
+        : {}),
+    });
+    for (const source of Object.values(adapter.seedFiles))
+      assert.ok(existsSync(source), `${harness} seeds a missing file: ${source}`);
+  }
+});
