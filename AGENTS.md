@@ -1,58 +1,24 @@
 # Working in this repository
 
-This is the Explicit Edit Benchmark: 226 deterministic exact-edit tasks with a byte-exact verifier,
-a runner that keeps runs comparable, adapters for several agent CLIs, and the flow that publishes an
-accepted result to a Hugging Face Dataset.
+Start with `README.md`. It is the entry point: what this benchmark is, what you need, and how a run
+works. Nothing about that is repeated here.
 
-You do not need to be told which file to open. When a request matches a skill below, load that skill
-and follow it.
+When the user asks for something, load the skill that matches it and follow that skill:
 
-## Skills
+| The ask                              | The skill                                      |
+| ------------------------------------ | ---------------------------------------------- |
+| Run an observation and publish it    | `.agents/skills/publish-benchmark-observation` |
+| Review a contributed result          | `.agents/skills/review-benchmark-candidate`    |
+| Add an adapter for another agent CLI | `.agents/skills/add-benchmark-harness`         |
+| Run Codex on a chosen account        | `.agents/skills/configure-codex-account`       |
+| Run Copilot on a chosen account      | `.agents/skills/configure-copilot-account`     |
 
-| Skill                           | Use it when the request is                                                                          |
-| ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `configure-codex-account`       | Run Codex on a ChatGPT subscription, an API-key route, or a Chinese provider                        |
-| `configure-copilot-account`     | Run Copilot on its own GitHub account, a provider key, or an OAuth-only plan through a local bridge |
-| `add-benchmark-harness`         | Add an adapter for another agent CLI                                                                |
-| `publish-benchmark-observation` | Run an observation and publish it to the Dataset                                                    |
-| `review-benchmark-candidate`    | Review, validate, and accept a contributed result                                                   |
+For anything deeper, read the document the README's "Where to read more" points at.
 
-## One way to run the benchmark is to be the runner
+Do nothing on your own initiative: no run, no commit, no publication until the user asks for it. A
+full observation spends real money, so confirm the scope before starting one, and prefer one task
+before the whole set.
 
-Start an agent in this repository and ask for a published result. It reads the skills, prepares the
-adapter, runs the exact tasks, exports and validates the bundle, and opens the Dataset pull request.
-Nothing else has to be arranged first. The same flow by hand is one command on the same configuration.
-
-A full observation spends real money on model calls. Run one task first (`--smoke`) unless the person
-asked for the whole set.
-
-## Rules that keep the published data honest
-
-- Never edit an exported row to make a result look better or to fix a name. Fix the source and rerun,
-  or migrate the bundle through the acceptance path, which recomputes every hash.
-- Never commit a credential. `provider.json`, `private-env.json`, `benchmark.config.ts` and
-  `submission-metadata.json` are ignored by git for that reason; keys belong in a private env file.
-- Keep prompts, model prose, raw commands, command output, sessions, workspaces and `results/` out of
-  git. They are not part of an observation.
-- Publish only facts the harness reported. A metric nobody observed stays `null`; it never becomes
-  zero, and a version nobody checked is never guessed.
-- Identities live in `src/suites/explicit-edit/version.ts`. Do not spell them out anywhere else; a
-  test fails when a literal appears outside that file.
-- A harness that starts a server per trial (the bb example) runs one trial at a time; running several
-  makes the machine the thing under test.
-
-## Before you commit
-
-```sh
-npm run check
-```
-
-Formatting, lint, type checks, unit and integration tests, and a deterministic sandbox trial. It makes
-no paid model calls, and it is the same command CI runs.
-
-## Where the depth is
-
-`docs/running.md` covers adapters, provider routes, mounts and credentials.
-`docs/benchmark-automation.md` covers the config API, the normalized data format and the Dataset
-views. `docs/methodology.md` explains the tasks, the scores and recovery, and `docs/architecture.md`
-says which layer owns which fact. The README lists all of them with one line each.
+Before you commit, run the check the README describes. It is free, it is what CI runs, and it catches
+a missing seeded file, an adapter name that does not exist, and an identity literal written outside
+its module.
