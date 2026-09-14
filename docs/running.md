@@ -63,6 +63,9 @@ Each adapter has its own quirks:
 - **Codex** writes its own `config.toml` and needs a Responses endpoint.
 - **Copilot** uses the current `COPILOT_PROVIDER_*` variables. BYOK runs are labelled `direct-completions`.
 - **DeepSeek Harness** needs a provider route: `dsh-standard` and `dsh-code` call a completions or catalog endpoint, so `--provider-file` is required. It writes its own `settings.yaml`. `dsh-standard` uses native tools, `dsh-code` uses PTC Code Mode. Both turn telemetry off and record the full SDK session event stream, which is what keeps same-session recovery working.
+- **Oh My Pi** installs through Bun, so its binary usually sits outside `PATH` at `~/.bun/bin/omp`.
+  Pass `--command ~/.bun/bin/omp --runtime ~/.bun`, and give it a credential store with
+  `--auth-file`; `export-subscription-credentials.mjs --omp` writes one.
 - **Pi Agent IDE** loads the published `pi-agent-ide` npm package, so install it and pass `--ide-package DIRECTORY` pointing at the installed package. The adapter reads the extension entry and version from that package and mounts the tree that holds it, so the extension's own dependencies come along. `--harness-version` must equal the installed package version, otherwise the harness version would be confused with the Pi agent version.
 
 ## Run a harness on your own subscription
@@ -128,12 +131,20 @@ and a key, so the subscription is fronted by two local pieces: a bridge that tur
 into that endpoint, and `scripts/wire-bridge.mjs`, which repairs what such a bridge usually gets
 wrong. The subscription is never contacted by the benchmark directly.
 
-**1. Sign in to the subscription in its own home.** The bridge reads that session:
+**1. Give the bridge a session.** If Pi is already signed in to that subscription, export an
+access-only snapshot of its credential instead of logging in twice:
 
 ```sh
-export CODEX_HOME="$HOME/.codex-bridge"
-codex login
+node scripts/export-subscription-credentials.mjs
+export CODEX_HOME="$HOME/.local/share/explicit-edit-benchmark/subscription/codex"
 ```
+
+The snapshot holds the access token and no refresh token, so it can only read and it expires with
+the Pi session; re-run the command after signing in or refreshing in Pi. To sign in separately
+instead, point `CODEX_HOME` at an empty directory and run `codex login` there.
+
+The same command writes an Oh My Pi credential store when you pass `--omp ~/.bun/bin/omp`, which is
+what that CLI needs as `--auth-file`.
 
 **2. Start the OAuth bridge.** Any bridge that serves `/v1/responses` works; this is the shape we
 ran, with [vekil](https://github.com/sozercan/vekil) and a provider config of its own:
