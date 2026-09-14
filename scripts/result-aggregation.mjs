@@ -33,14 +33,20 @@ export function taskFamily(taskId) {
   return "Other";
 }
 
-/** The rules a run followed, as one comparable string. Concurrency is recorded, not a rule. */
+/**
+ * The rules a run was judged by, as one comparable string: how many recovery attempts it allowed,
+ * its retry budget, and how long one attempt may take.
+ *
+ * Concurrency is deliberately absent. It says how many trials ran at once, not what the rules
+ * were, and two runs of the same harness must stay comparable whether they were run two at a time
+ * or ten. Contention still shows up where it belongs, in timings and in failures.
+ */
 function canonicalPolicy(policy) {
   if (!policy) return null;
   return JSON.stringify({
     oracleRecoveries: policy.oracleRecoveries ?? null,
     retryFailures: policy.retryFailures ?? null,
     timeoutMs: policy.timeoutMs ?? null,
-    concurrency: policy.concurrency ?? null,
   });
 }
 
@@ -67,6 +73,8 @@ function exactIdentity(profile, run) {
     modelVersion: profile.modelVersion ?? profile.model ?? null,
     ...agentHarness,
     provider: profile.provider ?? null,
+    // Recorded, not part of the comparison: it is how the run was scheduled.
+    concurrency: run.policy?.concurrency ?? null,
     configurationHash: profile.configurationHash ?? `${profile.runId}/${profile.profileId}`,
     transport: profile.transport ?? null,
     harnessKind: profile.harnessKind ?? null,
@@ -607,6 +615,9 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
     const representedVersions = new Set(
       group.rows.map((row) => `${row.benchmarkId}\t${row.benchmarkVersion ?? ""}`),
     );
+    const concurrencies = new Set(
+      group.rows.map((row) => row.concurrency).filter((value) => value != null),
+    );
     const coverage = mean(group.rows.map((row) => row.coverage)) ?? 0;
     const duration = averageMetric(group.rows, "duration");
     const coveredRuns = group.rows
@@ -632,6 +643,7 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       benchmarkFamilyCount: families.size,
       benchmarkIds: [...families.keys()].sort(),
       benchmarkVersionCount: representedVersions.size,
+      concurrencies: [...concurrencies].sort((a, b) => a - b),
       reasoningModeCount: reasoningModes.size,
       evidenceUnit: reasoningModes.size > 1 ? "task-modes" : "tasks",
       benchmarkId:

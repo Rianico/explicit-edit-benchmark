@@ -472,6 +472,24 @@ await test("leaderboard data: runs judged by different rules never merge", () =>
   assert.equal(new Set(rows.map((row) => row.policy)).size, 2);
 });
 
+await test("leaderboard data: how many trials ran at once does not split a group", () => {
+  const base = {
+    ...index.runs[0],
+    taskSetSha256: "set-a",
+    verifierSha256: "verifier-a",
+    policy: { oracleRecoveries: 5, retryFailures: 0, timeoutMs: 120000, concurrency: 2 },
+  };
+  const rows = aggregateLeaderboard(
+    { runs: [base, { ...base, runId: "run-b", policy: { ...base.policy, concurrency: 10 } }] },
+    [profiles[0], { ...profiles[0], runId: "run-b" }],
+    [trials[0], { ...trials[0], runId: "run-b" }],
+    [],
+  );
+  // Same rules, same task set, same verifier: one group, with the scheduling recorded next to it.
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].concurrencies, [2, 10]);
+});
+
 await test("describeDistribution: summarizes spread with quartiles instead of a single average", () => {
   assert.deepEqual(describeDistribution([1, 2, 3, 4, 5]), {
     count: 5,

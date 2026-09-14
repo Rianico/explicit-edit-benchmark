@@ -93,7 +93,7 @@ Then the command does the rest:
 
 **If step 3 fails, the command stops there.** That is the whole point of it: you find out that something is misconfigured before spending money on a full run. You never run that check yourself, and you never edit a config file to authorize a run.
 
-Every run uses the same 226 tasks. The rules a run followed — how many Oracle recovery attempts, how long one attempt may take, and how the trials were run in parallel — are recorded in the published bundle, and two runs are only grouped together when their rules and their verifier match. Raise `--timeout-seconds` for a harness that needs it: the result is still comparable, but it is compared with runs that used the same rules. Model calls come out of your account and cost money. The command prints the pull request URL when it finishes; send that URL to the maintainers.
+Every run uses the same 226 tasks. The rules a run was judged by — how many Oracle recovery attempts it allows and how long one attempt may take — are part of the comparison: two runs are grouped together only when their rules, their task set, and their verifier match. How many trials ran at once is recorded next to them but does not split a group: it is scheduling, not a rule, and it can still show up in timings or, under contention, in failures. Raise `--timeout-seconds` for a harness that needs it, and the result is compared with runs that used the same timeout.
 
 Some agents need a provider route or a credential file. That is one more flag on the same command:
 
