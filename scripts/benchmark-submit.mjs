@@ -92,6 +92,30 @@ export function submitOptions(args) {
   };
 }
 
+/** Print what each failed smoke trial reported, with anything credential-shaped removed. */
+async function explainSmokeFailure(summary, smokeRunId) {
+  for (const result of summary.results ?? []) {
+    if (result.passed) continue;
+    const stderr = await readFile(
+      path.join(root, "results", smokeRunId, "trials", result.id, "agent", "stderr.log"),
+      "utf8",
+    ).catch(() => "");
+    const reason = stderr
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean);
+    console.error(
+      `${result.id} exited with ${result.exitCode ?? result.signal ?? "no status"}` +
+        (reason ? `: ${redactCredentials(reason)}` : ""),
+    );
+  }
+}
+
+/** Harness logs stay local, and a token must never reach the terminal. */
+function redactCredentials(text) {
+  return text.replace(/[A-Za-z0-9_\-.]{24,}/g, "…");
+}
+
 /** Stop before the full run unless every selected profile passed its smoke task. */
 export function assertSmokePassed(summary, profileIds) {
   const failed = profileIds.filter((id) => {
@@ -208,7 +232,12 @@ async function main(args) {
     const smokeSummary = JSON.parse(
       await readFile(path.join(root, "results", smokeRunId, "summary.json"), "utf8"),
     );
-    assertSmokePassed(smokeSummary, Object.keys(profiles));
+    try {
+      assertSmokePassed(smokeSummary, Object.keys(profiles));
+    } catch (error) {
+      await explainSmokeFailure(smokeSummary, smokeRunId);
+      throw error;
+    }
 
     const runDirectory = path.join(root, "results", runId);
     console.log(`Running ${runId} with concurrency ${options.concurrency}…`);

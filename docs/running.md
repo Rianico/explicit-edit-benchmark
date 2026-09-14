@@ -35,8 +35,8 @@ Install your agent yourself and log in the way that agent expects. The benchmark
 
 | Adapter                      | `--model` argument   | Authentication                       |
 | ---------------------------- | -------------------- | ------------------------------------ |
-| `pi-default`                 | Pi provider/model id | Pi `auth.json` or an environment key |
-| `pi-agent-ide`               | Pi provider/model id | Pi `auth.json` or an environment key |
+| `pi-default`                 | Pi provider/model id | Pi `auth.json` via `--auth-file`     |
+| `pi-agent-ide`               | Pi provider/model id | Pi `auth.json` via `--auth-file`     |
 | `codex-cli-default`          | Provider model id    | Responses provider key               |
 | `opencode-default`           | Provider model id    | OpenAI-compatible provider key       |
 | `oh-my-pi-default`           | Provider model id    | OpenAI-compatible provider key       |
@@ -48,7 +48,7 @@ The model and reasoning strings go straight to the CLI, so what works depends on
 
 ## Provider routes and credential files
 
-Agents that read Pi's `auth.json` need nothing extra. Agents that talk to an API key need a local route:
+Agents that read Pi's `auth.json` need that one file copied in with `--auth-file`. Agents that talk to an API key need a local route:
 
 ```sh
 npm run benchmark:submit -- --harness codex-cli-default --model PROVIDER/MODEL --thinking low \
@@ -66,6 +66,9 @@ Each adapter has its own quirks:
 - **Oh My Pi** installs through Bun, so its binary usually sits outside `PATH` at `~/.bun/bin/omp`.
   Pass `--command ~/.bun/bin/omp --runtime ~/.bun`, and give it a credential store with
   `--auth-file`; `export-subscription-credentials.mjs --omp` writes one.
+- **Pi** reads `auth.json` from the Pi home inside the sandbox, and the sandbox starts empty, so a
+  Pi run needs `--auth-file ~/.pi/agent/auth.json`. Without the flag the harness starts with nobody
+  logged in and fails on its first request.
 - **Pi Agent IDE** loads the published `pi-agent-ide` npm package, so install it and pass `--ide-package DIRECTORY` pointing at the installed package. The adapter reads the extension entry and version from that package and mounts the tree that holds it, so the extension's own dependencies come along. `--harness-version` must equal the installed package version, otherwise the harness version would be confused with the Pi agent version.
 
 ## Run a harness on your own subscription
