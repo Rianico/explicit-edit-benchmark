@@ -21,13 +21,9 @@ There are 226 of them: replacements, insertions, deletions, copies, moves, large
 
 **Where results live:** the [Benchmark Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer) shows current rankings, and the [Hugging Face Dataset](https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark) stores every accepted run.
 
-## What this is for
+The benchmark grows with the people who run it. Run it on your own harness and configuration, publish the result, and it joins the same database and counts towards the statistics.
 
-An open benchmark only becomes useful when people add to it. If you run it on your own agent, harness, and model, publishing the result gives everyone else something to compare against.
-
-It is also easier to start from something that already works: take a configuration from the table below, adapt it to your setup, and share what you learn along the way. If you are building tooling for coding agents, the fixed task set and the exact verifier give you a stable target to measure against while you iterate.
-
-The benchmark keeps growing, in tasks, adapters, and the analysis around them. Ideas, requests, and disagreements are all welcome as issues, and pull requests get reviewed.
+There is room for more than this, too: longer and more involved edits are planned, closer to the work people do when they change software. Ideas are welcome as issues, pull requests are reviewed and merged when they help, and the author is open to discussing any of it.
 
 ## What you need
 
