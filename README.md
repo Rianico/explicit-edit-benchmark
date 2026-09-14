@@ -15,19 +15,19 @@
   <img src="https://img.shields.io/badge/node-24%2B-informational" alt="Node.js 24 or newer">
 </p>
 
-The tasks are deliberately simple. They need no deep reasoning and no domain knowledge. The agent has to find the right text, edit it, and leave every other byte untouched. That makes it easy to see how much the model, the harness setup, and the editing tools matter.
+The tasks are small on purpose. None of them needs deep reasoning or domain knowledge: the agent finds the right text, changes it, and leaves every other byte as it was. That keeps the attention on what actually differs between setups, which is the model, the tools, and the harness around them.
 
-It has 226 deterministic tasks: replacements, insertions, deletions, copies, moves, large files, several file types, and Unicode edge cases. The verifier compares the resulting files byte for byte.
+There are 226 of them: replacements, insertions, deletions, copies, moves, large files, several file types, and Unicode edge cases. A verifier compares the result byte for byte.
 
 **Where results live:** the [Benchmark Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer) shows current rankings, and the [Hugging Face Dataset](https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark) stores every accepted run.
 
 ## What this is for
 
-This is a public benchmark. Run it on your own agent, harness, and model setup, and publish the result so other people can compare, reuse, and build on it.
+An open benchmark only becomes useful when people add to it. If you run it on your own agent, harness, and model, publishing the result gives everyone else something to compare against.
 
-It is meant to be used, not just read. Take a configuration that already works, adapt it to your stack, and share what you learned. And if you are building tooling for coding agents, the task set and the exact verifier give you a fixed target to measure against while you iterate.
+It is also easier to start from something that already works: take a configuration from the table below, adapt it to your setup, and share what you learn along the way. If you are building tooling for coding agents, the fixed task set and the exact verifier give you a stable target to measure against while you iterate.
 
-The benchmark will keep growing: more tasks, more adapters, better analysis. If you have an idea, a wish, or an objection, open an issue. If you want to build something, send a pull request and it will be reviewed.
+The benchmark keeps growing, in tasks, adapters, and the analysis around them. Ideas, requests, and disagreements are all welcome as issues, and pull requests get reviewed.
 
 ## What you need
 
@@ -66,13 +66,13 @@ The benchmark has ready adapters for these CLIs. Use the name in the `--harness`
 
 The name in the flag is the published harness family, so a result lands in the leaderboard under the name you ran. The binary column is what actually runs; pass a different path with `--command` when yours is not on `PATH`. `pi-default` and `pi-agent-ide` both run `pi`, and differ only in the tools.
 
-Install and log in to that CLI yourself. The benchmark never installs or updates an agent, and it never touches someone else's credentials.
+You install and sign in to that CLI yourself. The benchmark leaves your CLI alone, and your credentials stay yours: it copies only the file you point it at, for the length of a run.
 
 For anything not in this list you write your own adapter. [Benchmark automation and public data](docs/benchmark-automation.md) documents the config API, and [examples/bb](examples/bb/benchmark.config.mjs) is a worked example for a harness that is more than one CLI call: it starts a server, runs another agent in a thread, and reads that thread's timeline. We ship the example and a smoke run, not a bb result.
 
 ## Run it
 
-One command. Give it the agent, the exact model, and the reasoning level:
+One command does the whole run. You choose the harness, the exact model, and the reasoning level:
 
 ```sh
 npm run benchmark:submit -- --harness pi-default --model PROVIDER/MODEL --thinking high --concurrency 10
@@ -80,12 +80,12 @@ npm run benchmark:submit -- --harness pi-default --model PROVIDER/MODEL --thinki
 
 You can run that yourself, or hand your coding agent this repository link and let it do the work: the skills in `.agents/skills/` know how to route a harness to your account, run the observation, and open the pull request. Ask it to publish a result and it will use them.
 
-| Flag            | What it means                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------ |
-| `--harness`     | The harness from the table above.                                                          |
-| `--model`       | The exact model id, spelled the way that CLI expects it.                                   |
-| `--thinking`    | The reasoning level, for example `low`, `medium`, or `high`.                               |
-| `--concurrency` | How many tasks run at once. Default 10. It changes how long the run takes, not the result. |
+| Flag            | What it means                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `--harness`     | The harness from the table above.                                                                                                         |
+| `--model`       | The exact model id, spelled the way that CLI expects it.                                                                                  |
+| `--thinking`    | The reasoning level, for example `low`, `medium`, or `high`.                                                                              |
+| `--concurrency` | How many tasks run at once. Default 10. It changes how long a run takes, and under heavy contention it can also change which trials fail. |
 
 Then the command does the rest:
 
@@ -95,9 +95,9 @@ Then the command does the rest:
 4. runs all 226 tasks;
 5. exports the result, validates it, and opens a pull request on the Dataset.
 
-**If step 3 fails, the command stops there.** That is the whole point of it: you find out that something is misconfigured before spending money on a full run. You never run that check yourself, and you never edit a config file to authorize a run.
+**If step 3 fails, the command stops there**, so a misconfiguration costs you a minute instead of a full run. That check is part of the command rather than something you have to remember.
 
-Every run uses the same 226 tasks. The rules a run was judged by — how many Oracle recovery attempts it allows and how long one attempt may take — are part of the comparison: two runs are grouped together only when their rules, their task set, and their verifier match. How many trials ran at once is recorded next to them but does not split a group: it is scheduling, not a rule, and it can still show up in timings or, under contention, in failures. Raise `--timeout-seconds` for a harness that needs it, and the result is compared with runs that used the same timeout.
+Every run sees the same 226 tasks. A run is grouped with others only when the rules match: how many recovery attempts it allows, how long one attempt may take, the task set, and the verifier. How many trials ran at once is recorded too, but it does not separate groups, because it is scheduling rather than a rule; it shows up in timings, and under contention sometimes in failures. If a harness needs longer, raise `--timeout-seconds`, and the result is compared with runs that used the same timeout.
 
 Some agents need a provider route or a credential file. That is one more flag on the same command:
 
@@ -113,13 +113,13 @@ If you keep your own `benchmark.config.ts`, submit it with `--config benchmark.c
 
 ## What gets published
 
-The pull request contains benchmark facts: task results, exact versions, timings, tool-call categories, and a safe copy of the configuration recipe.
+The pull request holds benchmark facts: task results, exact versions, timings, tool-call categories, and a safe copy of the configuration recipe. It holds no credentials, local paths, prompts, model prose, raw commands, command output, sessions, or workspaces, and your Hugging Face token only ever goes to the Hub API.
 
-It never contains credentials, local paths, prompts, model prose, raw commands, command output, sessions, or workspaces. Your Hugging Face token goes only to the Hub API. Keep every failure, timeout, and recovery attempt, and never edit exported rows by hand to improve a result.
+Keep the failures, timeouts, and recovery attempts in the result, because a published number is only useful when it is the real one. If a row is wrong, fix it at its source and rerun instead of editing the exported file.
 
 ## Show your result
 
-Once your run is accepted, put its score in your own README:
+Once your run is accepted, you can show its score in your own README:
 
 ```md
 [![Explicit Edit Benchmark](https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/pi-agent-ide.json&style=flat-square)](https://alexshpunt-benchmark-explorer.static.hf.space/?filter.harness=pi-agent-ide)
@@ -148,7 +148,7 @@ The badge is a small JSON file served by the Dataset, so [shields.io](https://sh
 npm run check
 ```
 
-This runs formatting, linting, type checks, the unit and integration tests, and a deterministic sandbox trial. It makes no paid model calls and does not replace a real run.
+It runs formatting, linting, type checks, the unit and integration tests, and one deterministic sandbox trial. No paid model calls are involved, so it is a cheap way to check a clone or a change before running anything real.
 
 ## Where to read more
 
@@ -162,7 +162,7 @@ This runs formatting, linting, type checks, the unit and integration tests, and 
 
 ## Skills for coding agents
 
-These are instructions a coding agent loads on its own, not documents to read. Pi picks them up from `.agents/skills/` when the task matches, so ask for the job rather than the file.
+These are instructions that a coding agent loads on its own rather than documents to read. Pi picks them up from `.agents/skills/` when a task matches, so it is enough to ask for the job.
 
 | Skill                           | The job it covers                                                                                     |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
