@@ -7,4 +7,4 @@ export function createBenchmarkAccount(registryFile: string, ownerId: string): P
 /** Load the hashed API-key registry used by the ingestion service. */
 export function loadBenchmarkAccounts(
   registryFile: string,
-): Promise<Record<string, { ownerId: string; trust: string[] }>>;
+): Promise<Record<string, { ownerId: string }>>;

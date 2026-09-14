@@ -22,7 +22,7 @@ hf download alexshpunt/explicit-edit-benchmark --repo-type dataset \
   --revision refs/pr/PR_NUMBER --local-dir .tmp/candidate
 ```
 
-Read, in this order: `candidates/<run-id>/submission.json` (who sent it, purpose, trust), `manifest.json` (contract, task-set hash, counts, policy), `profiles.jsonl` (agent, model, provider, harness, exact versions, reasoning), and skim `trials.jsonl` for the first and final exact results.
+Read, in this order: `candidates/<run-id>/submission.json` (who sent it, purpose), `manifest.json` (contract, task-set hash, counts, policy), `profiles.jsonl` (agent, model, provider, harness, exact versions, reasoning), and skim `trials.jsonl` for the first and final exact results.
 
 For a code pull request, read the diff and the touched files. Read `docs/benchmark-automation.md` when the change touches the schema, the aggregation, or the Dataset views.
 
@@ -39,7 +39,7 @@ This downloads current `main` and the candidate revision, runs the normalized va
 
 Also check by hand, because these are judgement calls:
 
-- trust is `self-reported` and the purpose field matches what the run actually is;
+- the purpose field matches what the run actually is;
 - the `clientRunId` and run id are new, and one pull request carries one run;
 - the task-set hash equals the task set of this repository (`npm run bench:list` gives the tasks);
 - identities are complete and truthful: agent, model, provider, harness, exact versions, reasoning;

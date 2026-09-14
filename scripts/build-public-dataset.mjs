@@ -152,6 +152,7 @@ export async function buildPublicDataset(outputDirectory, bundleDirectories) {
       contract: manifest.contract,
       taskSetSha256: manifest.taskSetSha256,
       verifierSha256: manifest.verifierSha256 ?? null,
+      policy: manifest.policy,
       ...(manifest.sourceRuns ? { sourceRuns: manifest.sourceRuns } : {}),
       counts: manifest.counts,
       completeness: manifest.completeness,
@@ -301,7 +302,6 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
       submissionId: metadata.submissionId,
       ownerId: metadata.ownerId,
       purpose: metadata.purpose,
-      trust: metadata.trust,
       definitions: metadata.definitions,
     };
   });

@@ -447,6 +447,31 @@ await test("leaderboard data: a partial run cannot look complete", () => {
   assertCloseTo(rows[0].coverage, 1 / 226);
 });
 
+await test("leaderboard data: runs judged by different rules never merge", () => {
+  const first = {
+    ...index.runs[0],
+    taskSetSha256: "set-a",
+    verifierSha256: "verifier-a",
+    policy: { oracleRecoveries: 5, retryFailures: 0, timeoutMs: 120000, concurrency: 1 },
+  };
+  const second = {
+    ...first,
+    runId: "run-b",
+    submissionId: "submission-b",
+    policy: { ...first.policy, timeoutMs: 900000 },
+  };
+  const rows = aggregateLeaderboard(
+    { runs: [first, second] },
+    [profiles[0], { ...profiles[0], runId: "run-b" }],
+    [trials[0], { ...trials[0], runId: "run-b" }],
+    [],
+  );
+  // Same benchmark, same id and version, same configuration: still two incomparable groups.
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.flatMap((row) => [...row.runIds]).sort(), ["run-a", "run-b"]);
+  assert.equal(new Set(rows.map((row) => row.policy)).size, 2);
+});
+
 await test("describeDistribution: summarizes spread with quartiles instead of a single average", () => {
   assert.deepEqual(describeDistribution([1, 2, 3, 4, 5]), {
     count: 5,

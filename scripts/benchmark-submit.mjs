@@ -146,7 +146,6 @@ export async function submissionMetadata(normalized, runId) {
   return {
     clientRunId: runId,
     purpose: "exploratory",
-    trust: "self-reported",
     definitions: {
       runner: { ...explicitEditRunner, version: explicitEditVersion },
       benchmark: {

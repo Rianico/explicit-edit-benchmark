@@ -46,7 +46,7 @@ tool-calls.jsonl
 
 `profiles.jsonl` records the agent, model, provider, harness, adapter, transport, reasoning mode, exact versions, and `configurationHash` that were actually observed. `configurations.jsonl` maps that hash to a recipe for reproducing the setup. A recipe holds safe public references and environment variable names, never credentials or local executable state.
 
-Runner, benchmark, task-set, owner, purpose, and trust provenance travel separately in the submission metadata.
+Runner, benchmark, task-set, and owner provenance travel separately in the submission metadata. The evidence is taken on trust and can be removed if it turns out to be wrong; there is no trust field to filter on.
 
 ## Candidates and accepted evidence
 

@@ -24,7 +24,6 @@ export async function buildSubmission(bundleDirectory, options) {
     schemaVersion: 1,
     clientRunId: options.clientRunId ?? manifest.runId,
     purpose: options.purpose,
-    trust: options.trust,
     definitions: options.definitions,
     bundle: { manifest, tables },
   };

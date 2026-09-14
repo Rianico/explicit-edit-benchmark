@@ -33,6 +33,17 @@ export function taskFamily(taskId) {
   return "Other";
 }
 
+/** The rules a run followed, as one comparable string. Concurrency is recorded, not a rule. */
+function canonicalPolicy(policy) {
+  if (!policy) return null;
+  return JSON.stringify({
+    oracleRecoveries: policy.oracleRecoveries ?? null,
+    retryFailures: policy.retryFailures ?? null,
+    timeoutMs: policy.timeoutMs ?? null,
+    concurrency: policy.concurrency ?? null,
+  });
+}
+
 function exactIdentity(profile, run) {
   const benchmark = run.definitions?.benchmark;
   const agentHarness = {
@@ -45,6 +56,11 @@ function exactIdentity(profile, run) {
     benchmarkId: benchmark?.id ?? run.contract,
     benchmarkVersion: benchmark?.version ?? null,
     contract: run.contract,
+    // Two runs are only comparable when they were judged by the same tasks, the same verifier,
+    // and the same rules. Everything else is provenance.
+    taskSetSha256: run.taskSetSha256 ?? null,
+    verifierSha256: run.verifierSha256 ?? null,
+    policy: canonicalPolicy(run.policy),
     runnerFamily: run.definitions?.runner?.id ?? null,
     runnerVersion: run.definitions?.runner?.version ?? null,
     modelFamily: profile.modelFamily ?? profile.modelId ?? profile.model,
@@ -519,6 +535,11 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
 
 function rollupIdentity(row) {
   return {
+    // The rules travel with the evidence: rolling up must never pool runs that were judged
+    // by different tasks, a different verifier, or a different policy.
+    taskSetSha256: row.taskSetSha256,
+    verifierSha256: row.verifierSha256,
+    policy: row.policy,
     modelFamily: row.modelFamily,
     modelVersion: row.modelVersion,
     agentFamily: row.agentFamily,

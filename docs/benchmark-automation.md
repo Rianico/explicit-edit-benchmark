@@ -150,7 +150,7 @@ npm run benchmark -- submit results/my-run/normalized \
   --metadata submission-metadata.json
 ```
 
-The command only accepts `self-reported` trust. It runs the normalized validator and the strict ingestion validator locally, then uploads these files under `candidates/RUN_ID/`:
+The command runs the normalized validator and the strict ingestion validator locally, then uploads these files under `candidates/RUN_ID/`:
 
 - `manifest.json`;
 - `profiles.jsonl`;

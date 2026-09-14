@@ -26,7 +26,7 @@ export async function createBenchmarkAccount(registryFile, ownerId) {
   if (registry.accounts.some((account) => account.ownerId === ownerId))
     throw Error(`Owner already exists: ${ownerId}`);
   const apiKey = `pibe_${randomBytes(24).toString("base64url")}`;
-  registry.accounts.push({ ownerId, keyHash: hashApiKey(apiKey), trust: ["self-reported"] });
+  registry.accounts.push({ ownerId, keyHash: hashApiKey(apiKey) });
   await mkdir(path.dirname(path.resolve(registryFile)), { recursive: true });
   await writeFile(registryFile, JSON.stringify(registry, null, 2) + "\n", { mode: 0o600 });
   return apiKey;
@@ -38,10 +38,7 @@ export async function loadBenchmarkAccounts(registryFile) {
   if (registry.schemaVersion !== 1 || !Array.isArray(registry.accounts))
     throw Error("Invalid account registry");
   return Object.fromEntries(
-    registry.accounts.map((account) => [
-      account.keyHash,
-      { ownerId: account.ownerId, trust: account.trust },
-    ]),
+    registry.accounts.map((account) => [account.keyHash, { ownerId: account.ownerId }]),
   );
 }
 

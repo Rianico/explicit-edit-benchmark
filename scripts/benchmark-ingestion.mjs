@@ -16,7 +16,6 @@ const TABLES = [
   "tool-calls.jsonl",
 ];
 const PURPOSES = new Set(["official", "community", "exploratory", "smoke", "debug"]);
-const TRUST = new Set(["self-reported", "reproducible", "verified", "maintainer-run"]);
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/;
 
 function object(value, label) {
@@ -99,17 +98,15 @@ export function assertDeclaredHarnessVersions(harnesses, profiles) {
   }
 }
 
-function validateEnvelope(input, account) {
+function validateEnvelope(input) {
   exactKeys(
     input,
-    ["schemaVersion", "clientRunId", "purpose", "trust", "definitions", "bundle"],
+    ["schemaVersion", "clientRunId", "purpose", "definitions", "bundle"],
     "submission",
   );
   if (input.schemaVersion !== 1) throw Error("submission: schemaVersion must be 1");
   text(input.clientRunId, "submission.clientRunId");
   if (!PURPOSES.has(input.purpose)) throw Error("submission: invalid purpose");
-  if (!TRUST.has(input.trust) || !account.trust.includes(input.trust))
-    throw Error("submission: trust is not allowed for this API key");
 
   exactKeys(input.definitions, ["benchmark", "taskSet", "harnesses", "runner"], "definitions");
   const benchmark = input.definitions.benchmark;
@@ -183,7 +180,7 @@ export async function listAcceptedSubmissions(storeDirectory) {
 
 /** Validate and atomically append one normalized observation bundle. */
 export async function ingestSubmission(storeDirectory, account, rawSubmission) {
-  const submission = validateEnvelope(object(rawSubmission, "submission"), account);
+  const submission = validateEnvelope(object(rawSubmission, "submission"));
   await mkdir(path.join(storeDirectory, "accepted"), { recursive: true });
   const index = await readIndex(storeDirectory);
   const ownerClient = index.submissions.find(
@@ -247,7 +244,6 @@ export async function ingestSubmission(storeDirectory, account, rawSubmission) {
       clientRunId: submission.clientRunId,
       runId: manifest.runId,
       purpose: submission.purpose,
-      trust: submission.trust,
       definitions: submission.definitions,
     };
     await writeFile(

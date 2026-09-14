@@ -1,6 +1,5 @@
 export interface IngestionAccount {
   ownerId: string;
-  trust: string[];
 }
 
 export interface IngestionServer {

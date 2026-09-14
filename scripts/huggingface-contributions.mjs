@@ -97,14 +97,12 @@ async function publishDirectory({ hub, repo, accessToken, parentCommit, outputDi
 async function validateCandidateMetadata(metadata) {
   exactKeys(
     metadata,
-    ["schemaVersion", "ownerId", "clientRunId", "purpose", "trust", "definitions"],
+    ["schemaVersion", "ownerId", "clientRunId", "purpose", "definitions"],
     "candidate metadata",
   );
   if (metadata.schemaVersion !== 1) throw Error("candidate metadata: schemaVersion must be 1");
   if (typeof metadata.ownerId !== "string" || !SAFE_SEGMENT.test(metadata.ownerId))
     throw Error("candidate metadata: invalid ownerId");
-  if (metadata.trust !== "self-reported")
-    throw Error("Hugging Face candidates must use self-reported trust");
   return metadata;
 }
 
@@ -113,11 +111,7 @@ async function ingestCandidate(storeDirectory, candidateDirectory) {
     JSON.parse(await readFile(path.join(candidateDirectory, "submission.json"), "utf8")),
   );
   const submission = await buildSubmission(candidateDirectory, metadata);
-  const result = await ingestSubmission(
-    storeDirectory,
-    { ownerId: metadata.ownerId, trust: ["self-reported"] },
-    submission,
-  );
+  const result = await ingestSubmission(storeDirectory, { ownerId: metadata.ownerId }, submission);
   if (!result.created) throw Error("Candidate observation already exists on main");
   return { result, runId: submission.bundle.manifest.runId };
 }
@@ -137,9 +131,7 @@ export async function submitHuggingFaceCandidate({
   if (!token)
     throw Error("Hugging Face authentication is required; run `hf auth login` or set HF_TOKEN");
   const metadata = JSON.parse(await readFile(path.resolve(metadataFile), "utf8"));
-  exactKeys(metadata, ["clientRunId", "purpose", "trust", "definitions"], "submission metadata");
-  if (metadata.trust !== "self-reported")
-    throw Error("Hugging Face candidates must use self-reported trust");
+  exactKeys(metadata, ["clientRunId", "purpose", "definitions"], "submission metadata");
   const submission = await buildSubmission(bundleDirectory, metadata);
   const runId = submission.bundle.manifest.runId;
   if (!SAFE_SEGMENT.test(runId)) throw Error(`Invalid runId: ${runId}`);
@@ -149,18 +141,13 @@ export async function submitHuggingFaceCandidate({
     ownerId: identity.name,
     clientRunId: submission.clientRunId,
     purpose: submission.purpose,
-    trust: submission.trust,
     definitions: submission.definitions,
   });
 
   // Ingestion writes atomically, so validate in an isolated temporary store.
   const temporaryStore = await mkdtemp(path.join(os.tmpdir(), "hf-candidate-store-"));
   try {
-    await ingestSubmission(
-      temporaryStore,
-      { ownerId: candidateMetadata.ownerId, trust: ["self-reported"] },
-      submission,
-    );
+    await ingestSubmission(temporaryStore, { ownerId: candidateMetadata.ownerId }, submission);
   } finally {
     await rm(temporaryStore, { recursive: true, force: true });
   }
