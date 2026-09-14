@@ -1,0 +1,14 @@
+{
+  "id": "example-provider",
+  "displayName": "Example OpenAI-compatible provider",
+  "apiKeyEnv": "EXAMPLE_API_KEY",
+  "endpoints": {
+    "completions": "https://api.example.test/v1",
+    "responses": "https://api.example.test/v1"
+  },
+  "copilotWireApi": "completions",
+  "copilotModelId": "example-model",
+  "copilotReasoningEffort": true,
+  "copilotMaxPromptTokens": 262144,
+  "copilotMaxOutputTokens": 32768
+}

@@ -65,6 +65,68 @@ Each adapter has its own quirks:
 - **DeepSeek Harness** needs a provider route: `dsh-standard` and `dsh-code` call a completions or catalog endpoint, so `--provider-file` is required. It writes its own `settings.yaml`. `dsh-standard` uses native tools, `dsh-code` uses PTC Code Mode. Both turn telemetry off and record the full SDK session event stream, which is what keeps same-session recovery working.
 - **Pi Agent IDE** loads the published `pi-agent-ide` npm package, so install it and pass `--ide-package DIRECTORY` pointing at the installed package. The adapter reads the extension entry and version from that package and mounts it read-only. `--harness-version` must equal the installed package version, otherwise the harness version would be confused with the Pi agent version.
 
+## Run a harness on your own subscription
+
+There are three ways to pay for the model behind a run, and all three publish the same kind of
+evidence. Pick by what your account gives you.
+
+### Copilot on its own GitHub subscription
+
+The GitHub Copilot CLI already knows your account, so it needs no routing file. It does need its
+sign-in copied into the sandbox:
+
+```sh
+npm run benchmark:submit -- --harness github-copilot-cli-default --model gpt-5.6-luna --thinking high \
+  --auth-file "$HOME/.copilot/config.json"
+```
+
+Install the CLI and sign in the way it expects (`copilot`, then its login flow). `--auth-file` copies
+that one file into the sandbox; nothing else from your home directory is mounted. The adapter runs
+the CLI with `--no-auto-update`, without built-in MCP servers, and without custom instructions, so
+the measurement stays with the harness rather than with whatever your global configuration adds.
+
+### Copilot with your own provider key (BYOK)
+
+This is how a subscription or a plan that only speaks the OpenAI wire protocol gets measured: point
+the Copilot CLI at your endpoint and give it your key. Copy the two examples and fill them in:
+
+```sh
+cp examples/provider.example.json provider.json
+cp examples/private-env.example.json private-env.json
+npm run benchmark:submit -- --harness github-copilot-cli-default --model PROVIDER/MODEL --thinking high \
+  --provider-file provider.json \
+  --env-file private-env.json
+```
+
+`provider.json` holds routing metadata: `id`, `apiKeyEnv`, and an endpoint per protocol. It holds no
+key. `private-env.json` holds the key itself and stays on your machine. Keep both files private:
+the prepared configuration carries the values from the environment file, and the repository ignores
+`provider.json`, `private-env.json`, and `benchmark.config.ts` for exactly that reason.
+
+Copilot-specific fields, all optional except the endpoint:
+
+| Field                                              | Effect                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `copilotWireApi`                                   | `completions` (default) or `responses`. It picks the endpoint and labels the transport      |
+| `copilotModelId`                                   | The id sent to the provider when it differs from the benchmark's `--model`                  |
+| `copilotReasoningEffort`                           | Add `--effort <thinking>` when the provider accepts reasoning effort                        |
+| `copilotMaxPromptTokens`, `copilotMaxOutputTokens` | Pass the provider's token limits through                                                    |
+| `copilotHeadersEnv`                                | Name of an environment variable holding extra request headers, when the provider needs them |
+
+The adapter always runs Copilot with `COPILOT_OFFLINE=true`, so it cannot fall back to GitHub while
+you measure your own provider. A BYOK run is published as `direct-completions` (or
+`direct-responses`), which is how it stays distinguishable from the same CLI on its own account.
+
+### A plan that only speaks OAuth
+
+Some plans (an OpenAI subscription, for example) hand you a login instead of an API key. The adapter
+needs an OpenAI-compatible endpoint and a key, so such a plan has to be fronted by a small local
+bridge that turns the OAuth session into that endpoint. This repository does not ship a bridge:
+write one, or use one you trust, then treat it like any other BYOK provider — the base URL points at
+the bridge, and the key variable holds whatever the bridge expects. Select the wire API your bridge
+speaks; a bridge that only forwards partial streaming items will fail the `responses` path, because
+the Responses API expects each output item to be complete in the final event.
+
 ## Runtime and mounts
 
 The runner does not inherit your whole shell environment.
