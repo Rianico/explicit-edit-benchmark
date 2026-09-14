@@ -1,0 +1,11 @@
+{
+  "id": "codex-oauth",
+  "displayName": "OpenAI subscription through a local wire bridge",
+  "apiKeyEnv": "BRIDGE_API_KEY",
+  "endpoints": {
+    "responses": "http://127.0.0.1:1339/v1"
+  },
+  "copilotWireApi": "responses",
+  "copilotModelId": "gpt-5.6-luna",
+  "copilotReasoningEffort": true
+}

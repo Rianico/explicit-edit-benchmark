@@ -119,13 +119,55 @@ you measure your own provider. A BYOK run is published as `direct-completions` (
 
 ### A plan that only speaks OAuth
 
-Some plans (an OpenAI subscription, for example) hand you a login instead of an API key. The adapter
-needs an OpenAI-compatible endpoint and a key, so such a plan has to be fronted by a small local
-bridge that turns the OAuth session into that endpoint. This repository does not ship a bridge:
-write one, or use one you trust, then treat it like any other BYOK provider — the base URL points at
-the bridge, and the key variable holds whatever the bridge expects. Select the wire API your bridge
-speaks; a bridge that only forwards partial streaming items will fail the `responses` path, because
-the Responses API expects each output item to be complete in the final event.
+Some plans hand you a login instead of an API key. The adapter needs an OpenAI-compatible endpoint
+and a key, so the subscription is fronted by two local pieces: a bridge that turns the OAuth session
+into that endpoint, and `scripts/wire-bridge.mjs`, which repairs what such a bridge usually gets
+wrong. The subscription is never contacted by the benchmark directly.
+
+**1. Sign in to the subscription in its own home.** The bridge reads that session:
+
+```sh
+export CODEX_HOME="$HOME/.codex-bridge"
+codex login
+```
+
+**2. Start the OAuth bridge.** Any bridge that serves `/v1/responses` works; this is the shape we
+ran, with [vekil](https://github.com/sozercan/vekil) and a provider config of its own:
+
+```sh
+CODEX_HOME="$CODEX_HOME" vekil --host 127.0.0.1 --port 1337 \
+  --providers-config providers.json --log-level warn
+```
+
+**3. Put the wire bridge in front of it.** Two things break a Responses client otherwise: the stream
+arrives labelled `application/json`, and the final `response.completed` event carries no output
+because the items were already sent in `response.output_item.done`. The bridge fixes the label and
+assembles that final output. It forwards requests unchanged and rewrites no model input, reasoning
+setting, or generated text:
+
+```sh
+node scripts/wire-bridge.mjs --upstream http://127.0.0.1:1337 --port 1339 --log .tmp/wire.jsonl
+```
+
+`--log` writes one line per request with the path, model, reasoning setting, and stream flag. Keep
+it local: it holds no credentials and no prompt text, but it is still your traffic.
+
+**4. Point the benchmark at the bridge and run it:**
+
+```sh
+cp examples/openai-subscription.example.json provider.json
+cp examples/openai-subscription.env.example.json private-env.json
+npm run benchmark:submit -- --harness github-copilot-cli-default --model gpt-5.6-luna --thinking high \
+  --provider-file provider.json \
+  --env-file private-env.json
+```
+
+The key in `private-env.json` only has to be non-empty: the OAuth session behind the bridge is what
+authenticates. The published transport for this route is `direct-responses`, so the result stays
+distinguishable from the same CLI on its own GitHub account and from a plain API key route.
+
+If the subscription is not signed in, or the bridge is not running, the run fails on its first
+request instead of quietly falling back to GitHub: the adapter always sets `COPILOT_OFFLINE=true`.
 
 ## Runtime and mounts
 
