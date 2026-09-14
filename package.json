@@ -1,0 +1,37 @@
+{
+  "name": "explicit-edit-benchmark",
+  "private": true,
+  "description": "Reproducible mechanical text editing benchmarks for coding agent harnesses.",
+  "type": "module",
+  "scripts": {
+    "benchmark": "node --import tsx scripts/benchmark.mjs",
+    "benchmark:submit": "node --import tsx scripts/benchmark-submit.mjs",
+    "bench:list": "node --import tsx scripts/list-tasks.mjs",
+    "bench:prepare": "node scripts/prepare-benchmark.mjs",
+    "bench:run": "node --import tsx scripts/run-harness-batch.mjs",
+    "bench:export": "node --import tsx scripts/export-oracle-benchmark.mjs",
+    "bench:report": "python3 scripts/analyze-oracle-recovery.py",
+    "test": "node --import tsx --test test/unit/*.test.mjs",
+    "test:integration": "node --import tsx --test test/integration/*.test.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:integration",
+    "lint": "oxlint --deny-warnings .",
+    "typecheck": "tsc --noEmit",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
+  },
+  "dependencies": {
+    "@huggingface/hub": "^2.17.1",
+    "tsx": "4.20.6"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "^1.79.0",
+    "@types/node": "^24.0.4",
+    "oxfmt": "^0.64.0",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

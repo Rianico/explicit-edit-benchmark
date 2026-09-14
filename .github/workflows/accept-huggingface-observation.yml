@@ -1,0 +1,41 @@
+---
+name: Accept Hugging Face observation
+
+"on":
+  workflow_dispatch:
+    inputs:
+      dataset_repository:
+        description: Hugging Face dataset repository (owner/name)
+        required: true
+        type: string
+      candidate_ref:
+        description: Hugging Face pull request number or revision
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: huggingface-dataset-${{ inputs.dataset_repository }}
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - run: npm ci
+      - name: Validate, materialize, and publish the candidate
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          DATASET_REPOSITORY: ${{ inputs.dataset_repository }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >-
+          npm run benchmark -- accept
+          --repository "$DATASET_REPOSITORY"
+          --candidate "$CANDIDATE_REF"

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "id": "glm-5.3-flash",
+      "series": "glm-flash-low",
+      "piModel": "zai/glm-5.3-flash",
+      "providerModel": "glm-5.3-flash",
+      "provider": {
+        "id": "zai",
+        "displayName": "Z.AI Coding Plan",
+        "apiKeyEnv": "ZAI_API_KEY",
+        "endpoints": {
+          "completions": "https://api.z.ai/api/coding/paas/v4",
+          "responses": "https://api.z.ai/api/v1"
+        },
+        "copilotReasoningEffort": false,
+        "codexReasoningEffort": true,
+        "dshReasoningEffort": true,
+        "contextWindow": 1000000,
+        "maxTokens": 131072,
+        "compat": {
+          "supportsStore": false,
+          "supportsDeveloperRole": false,
+          "supportsReasoningEffort": true,
+          "maxTokensField": "max_tokens",
+          "thinkingFormat": "zai",
+          "zaiToolStream": true
+        }
+      }
+    },
+    {
+      "id": "qwen3.8-flash",
+      "runByDefault": false,
+      "series": "qwen-flash-low",
+      "piModel": "alibaba-token-plan/qwen3.8-flash",
+      "providerModel": "qwen3.8-flash",
+      "provider": {
+        "id": "qwen-token-plan",
+        "displayName": "Qwen Token Plan",
+        "apiKeyEnv": "QWEN_TOKEN_PLAN_API_KEY",
+        "endpoints": {
+          "completions": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+          "responses": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+        },
+        "copilotReasoningEffort": false,
+        "codexReasoningEffort": true,
+        "dshReasoningEffort": true,
+        "contextWindow": 1000000,
+        "maxTokens": 131072,
+        "compat": {
+          "thinkingFormat": "qwen",
+          "supportsDeveloperRole": false,
+          "supportsStore": false,
+          "supportsReasoningEffort": true
+        }
+      }
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "series": "deepseek-v4-flash-low",
+      "piModel": "deepseek/deepseek-v4-flash",
+      "providerModel": "deepseek-v4-flash",
+      "provider": {
+        "id": "deepseek",
+        "displayName": "DeepSeek",
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "endpoints": {
+          "completions": "https://api.deepseek.com",
+          "responses": "https://api.deepseek.com"
+        },
+        "copilotReasoningEffort": false,
+        "codexReasoningEffort": true,
+        "dshReasoningEffort": true,
+        "contextWindow": 1000000,
+        "maxTokens": 384000,
+        "compat": {
+          "supportsStore": false,
+          "supportsDeveloperRole": false,
+          "maxTokensField": "max_tokens",
+          "requiresReasoningContentOnAssistantMessages": true,
+          "thinkingFormat": "deepseek"
+        }
+      }
+    },
+    {
+      "id": "deepseek-next-flash",
+      "series": "deepseek-next-flash-low",
+      "piModel": "deepseek/deepseek-v4.1-flash-expires-on-0910",
+      "providerModel": "deepseek-v4.1-flash-expires-on-0910",
+      "expiresOn": "2026-09-10",
+      "provider": {
+        "id": "deepseek",
+        "displayName": "DeepSeek",
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "endpoints": {
+          "completions": "https://api.deepseek.com",
+          "responses": "https://api.deepseek.com"
+        },
+        "copilotReasoningEffort": false,
+        "codexReasoningEffort": true,
+        "dshReasoningEffort": true,
+        "contextWindow": 1000000,
+        "maxTokens": 384000,
+        "compat": {
+          "supportsStore": false,
+          "supportsDeveloperRole": false,
+          "maxTokensField": "max_tokens",
+          "requiresReasoningContentOnAssistantMessages": true,
+          "thinkingFormat": "deepseek"
+        }
+      }
+    },
+    {
+      "id": "mimo-v2.5",
+      "series": "mimo-flash-low",
+      "piModel": "xiaomi/mimo-v2.5",
+      "providerModel": "mimo-v2.5",
+      "provider": {
+        "id": "xiaomi",
+        "displayName": "Xiaomi MiMo",
+        "apiKeyEnv": "XIAOMI_API_KEY",
+        "endpoints": {
+          "completions": "https://api.xiaomimimo.com/v1",
+          "responses": "https://api.xiaomimimo.com/v1"
+        },
+        "copilotReasoningEffort": false,
+        "codexReasoningEffort": true,
+        "dshReasoningEffort": true,
+        "contextWindow": 1048576,
+        "maxTokens": 131072,
+        "compat": {
+          "requiresReasoningContentOnAssistantMessages": true,
+          "thinkingFormat": "deepseek"
+        }
+      }
+    }
+  ]
+}

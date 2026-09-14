@@ -1,0 +1,32 @@
+{
+  "clientRunId": "my-run-2026-09-10",
+  "purpose": "exploratory",
+  "trust": "self-reported",
+  "definitions": {
+    "runner": {
+      "id": "explicit-edit-benchmark",
+      "name": "Explicit Edit Benchmark",
+      "version": "0.1.0",
+      "sourceHash": "sha256-of-the-runner-source"
+    },
+    "benchmark": {
+      "id": "community/my-benchmark",
+      "version": "1",
+      "contract": "community/my-benchmark@1",
+      "kind": "experimental",
+      "hash": "sha256-of-the-safe-benchmark-contract"
+    },
+    "taskSet": {
+      "hash": "same-value-as-normalized-manifest-taskSetSha256",
+      "taskIds": ["task-a", "task-b"]
+    },
+    "harnesses": [
+      {
+        "id": "my-harness",
+        "name": "My harness",
+        "version": "1.0.0",
+        "sourceHash": "sha256-of-the-adapter-source"
+      }
+    ]
+  }
+}

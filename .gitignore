@@ -1,0 +1,12 @@
+node_modules/
+.tmp/
+results/
+.env*
+/benchmark.config.ts
+/provider.json
+/private-env.json
+/submission-metadata.json
+*.log
+__pycache__/
+.vscode/
+.playwright-mcp/
