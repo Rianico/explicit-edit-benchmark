@@ -23,13 +23,46 @@ function withRunId(content, runId) {
   );
 }
 
-function datasetCard(includeSubmissions = false) {
+/**
+ * One row per model family, built from the same aggregates the Explorer shows. This is the table
+ * people ask for first: how a model did overall, across every harness that ran it.
+ */
+/** Percent for the card, or a dash when a value was never observed. */
+function formatScore(value) {
+  return value == null ? "-" : `${(value * 100).toFixed(1)}%`;
+}
+
+function modelLeaderboard(groups = {}, leaderboardRows = []) {
+  const harnesses = new Map();
+  for (const row of leaderboardRows) {
+    const families = harnesses.get(row.modelFamily) ?? new Set();
+    families.add(row.harnessFamily);
+    harnesses.set(row.modelFamily, families);
+  }
+  return Object.entries(groups)
+    .map(([modelFamily, group]) => ({
+      modelFamily,
+      score: group.score ?? null,
+      qualityScore: group.qualityScore ?? null,
+      coverage: group.coverage ?? null,
+      firstExactRate: group.firstExactRate ?? null,
+      finalExactRate: group.finalExactRate ?? null,
+      taskCount: group.taskCount ?? null,
+      benchmarkTaskCount: group.benchmarkTaskCount ?? null,
+      observations: group.observations ?? null,
+      harnessFamilies: [...(harnesses.get(modelFamily) ?? [])].sort(),
+    }))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+function datasetCard({ includeSubmissions = false, models = [] } = {}) {
   const tables = [
     ["profiles", "data/profiles/*.jsonl.gz"],
     ["configurations", "data/configurations/*.jsonl.gz"],
     ["trials", "data/trials/*.jsonl.gz"],
     ["rounds", "data/rounds/*.jsonl.gz"],
     ["tool-calls", "data/tool-calls/*.jsonl.gz"],
+    ...(models.length ? [["models", "data/models.jsonl.gz"]] : []),
     ...(includeSubmissions ? [["submissions", "data/submissions.jsonl.gz"]] : []),
   ];
   const configs = tables
@@ -69,6 +102,27 @@ function datasetCard(includeSubmissions = false) {
     "",
     "**[Open the interactive Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer)** to compare agents, harnesses, models, versions, reasoning modes, correctness, recovery, time, cost and tokens.",
     "",
+    ...(models.length
+      ? [
+          "## Leaderboard by model",
+          "",
+          "Score = coverage × (0.75 × first attempt + 0.25 × final attempt), over every accepted",
+          "configuration of that model. The same numbers are in `views.json`, and the",
+          "[Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer) breaks them down by",
+          "harness, version and reasoning mode.",
+          "",
+          "| Model | Score | Coverage | Tasks | Observations | Harnesses |",
+          "| --- | --- | --- | --- | --- | --- |",
+          ...models.map(
+            (row) =>
+              `| \`${row.modelFamily}\` | ${formatScore(row.score)} | ${formatScore(row.coverage)} | ${row.taskCount ?? "-"} | ${row.observations ?? "-"} | ${row.harnessFamilies.length} |`,
+          ),
+          "",
+          "The harness list behind each row is in `data/models.jsonl.gz`, and `views.json` holds the same",
+          "aggregates for the other groupings: by harness, by agent and by reasoning mode.",
+          "",
+        ]
+      : []),
     "## Tables",
     "",
     "| Config | One row per |",
@@ -407,6 +461,16 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
     ),
     toolUsage: aggregateToolUsage(publicIndex, allProfiles, allTrials, allRounds, allToolCalls),
   };
+  const models = modelLeaderboard(views.groups.modelFamily, leaderboardRows);
+  const modelsContent =
+    models.map((row) => JSON.stringify(row)).join("\n") + (models.length ? "\n" : "");
+  const modelsCompressed = gzipSync(modelsContent, { level: 6, mtime: 0 });
+  await writeFile(path.join(outputDirectory, "data", "models.jsonl.gz"), modelsCompressed);
+  index.models = {
+    path: "data/models.jsonl.gz",
+    bytes: modelsCompressed.byteLength,
+    sha256: createHash("sha256").update(modelsCompressed).digest("hex"),
+  };
   const viewsContent = JSON.stringify(views) + "\n";
   await writeFile(path.join(outputDirectory, "views.json"), viewsContent);
   index.views = {
@@ -448,7 +512,10 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
     path.join(outputDirectory, "dataset-index.json"),
     JSON.stringify(index, null, 2) + "\n",
   );
-  await writeFile(path.join(outputDirectory, "README.md"), datasetCard(true));
+  await writeFile(
+    path.join(outputDirectory, "README.md"),
+    datasetCard({ includeSubmissions: true, models }),
+  );
   return index;
 }
 
