@@ -162,7 +162,7 @@ It runs formatting, linting, type checks, the unit and integration tests, and on
 
 ## Skills for coding agents
 
-These are instructions that a coding agent loads on its own rather than documents to read. Pi picks them up from `.agents/skills/` when a task matches, so it is enough to ask for the job.
+These are instructions that a coding agent loads on its own rather than documents to read. They live in `.agents/skills/`, and an agent that supports skills picks them up when a task matches, so it is enough to ask for the job.
 
 | Skill                           | The job it covers                                                                                     |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------- |

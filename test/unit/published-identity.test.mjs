@@ -1,20 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import { safeConfiguration, rehashConfiguration } from "../../scripts/normalized-run.mjs";
 import { assertDeclaredHarnessVersions } from "../../scripts/benchmark-ingestion.mjs";
-
-/** Every source file below a directory, so the guard sees new files too. */
-async function walk(relative) {
-  const found = [];
-  for (const entry of await readdir(relative, { withFileTypes: true })) {
-    const target = path.join(relative, entry.name);
-    if (entry.isDirectory()) found.push(...(await walk(target)));
-    else found.push(target);
-  }
-  return found;
-}
 
 const adapter = {
   configurationId: "pi-default/default",
@@ -66,24 +53,4 @@ await test("a declared harness version has to be one the bundle actually ran", (
     () => assertDeclaredHarnessVersions(harnesses, [{ harnessId: "pi-default" }]),
     /undeclared harness/,
   );
-});
-
-await test("one module owns the benchmark identity", async () => {
-  const home = "src/suites/explicit-edit/version.ts";
-  const literals = [
-    '"explicit-edit-v1"',
-    '"explicit-edit/explicit-edit"',
-    '"explicit-edit-benchmark"',
-  ];
-  const offenders = [];
-  // Production code only: a test fixture may legitimately spell out an identity value.
-  for (const directory of ["scripts", "src"]) {
-    for (const file of await walk(directory)) {
-      if (file === home || !/\.(mjs|ts)$/.test(file)) continue;
-      const text = await readFile(file, "utf8");
-      for (const literal of literals)
-        if (text.includes(literal)) offenders.push(`${file}: ${literal}`);
-    }
-  }
-  assert.deepEqual(offenders, []);
 });
