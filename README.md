@@ -155,3 +155,15 @@ This runs formatting, linting, type checks, the unit and integration tests, and 
 | [Benchmark automation and public data](docs/benchmark-automation.md) | The config API, the normalized data format, and the Dataset views                  |
 | [Methodology](docs/methodology.md)                                   | How tasks are generated, what the scores mean, and how recovery works              |
 | [Architecture](docs/architecture.md)                                 | Where each fact lives, and which layer owns what                                   |
+
+## Skills for coding agents
+
+These are instructions a coding agent loads on its own, not documents to read. Pi picks them up from `.agents/skills/` when the task matches, so ask for the job rather than the file.
+
+| Skill                           | The job it covers                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `configure-codex-account`       | Run Codex on a ChatGPT subscription, an API-key route, or a Chinese provider such as Z.AI or DeepSeek |
+| `configure-copilot-account`     | Run Copilot on its own GitHub account, a provider key, or an OAuth-only plan through a local bridge   |
+| `add-benchmark-harness`         | Add an adapter for another agent CLI                                                                  |
+| `publish-benchmark-observation` | Run a full observation and open the Dataset pull request                                              |
+| `review-benchmark-candidate`    | Review, validate, and accept a contributed result                                                     |
