@@ -532,6 +532,8 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
   const summary = {
     schemaVersion: 1,
     ...summarizeTrials(allTrials),
+    models: models.length,
+    configurations: leaderboardRows.length,
     efficiency: summarizeEfficiency(allTrials, allRounds),
   };
   const summaryContent = JSON.stringify(summary, null, 2) + "\n";
