@@ -7,15 +7,17 @@
 <p align="center">Measure how well a model and an agent harness work together on precise text edits, then publish the result so others can compare.</p>
 
 <p align="center">
-  <a href="https://github.com/alexshpunt/explicit-edit-benchmark/actions/workflows/ci.yml"><img src="https://github.com/alexshpunt/explicit-edit-benchmark/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="https://github.com/alexshpunt/explicit-edit-benchmark/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/alexshpunt/explicit-edit-benchmark/ci.yml?branch=main&label=CI%2FCD" alt="CI/CD status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dataset-Hugging%20Face-f0c04a" alt="Hugging Face Dataset"></a>
   <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/ranking-Explorer-2f6fe4" alt="Benchmark Explorer"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/tasks-226%20exact%20edits-54d1a0" alt="226 tasks">
-  <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-observations.json" alt="Accepted benchmark observations"></a>
-  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-models.json" alt="Models in the benchmark dataset"></a>
-  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-setups.json" alt="Setups in the benchmark dataset"></a>
-  <img src="https://img.shields.io/badge/node-24%2B-informational" alt="Node.js 24 or newer">
+  <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.observations&label=observations&color=54d1a0" alt="Accepted benchmark observations"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.models&label=models&color=54d1a0" alt="Models in the benchmark dataset"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.setups&label=setups&color=54d1a0" alt="Setups in the benchmark dataset"></a>
 </p>
 
 The tasks are small on purpose. None of them needs deep reasoning or domain knowledge: the agent finds the right text, changes it, and leaves every other byte as it was. That keeps the attention on what actually differs between setups, which is the model, the tools, and the harness around them.

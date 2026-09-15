@@ -154,37 +154,9 @@ function badgeColor(score) {
   return "red";
 }
 
-/** Format a non-negative count for a compact README badge. */
-export function formatBadgeCount(count) {
-  if (count < 1_000) return String(count);
-  if (count < 1_000_000) {
-    const thousands = count / 1_000;
-    return `${thousands >= 10 ? Math.round(thousands) : Number(thousands.toFixed(1))}k`;
-  }
-  const millions = count / 1_000_000;
-  return `${millions >= 10 ? Math.round(millions) : Number(millions.toFixed(1))}m`;
-}
-
-/** Build the Dataset and harness README badges in the shields.io endpoint format. */
-async function writeBadges(outputDirectory, groups, counts) {
-  const files = Object.fromEntries(
-    Object.entries({
-      "dataset-observations.json": ["observations", counts.observations],
-      "dataset-models.json": ["models", counts.models],
-      "dataset-setups.json": ["setups", counts.setups],
-    }).map(([name, [label, count]]) => [
-      name,
-      JSON.stringify({
-        schemaVersion: 1,
-        label,
-        message: formatBadgeCount(count),
-        color: "f0c04a",
-        labelColor: "24292e",
-        style: "flat-square",
-        cacheSeconds: 300,
-      }) + "\n",
-    ]),
-  );
+/** Build one README badge per accepted harness family, in the shields.io endpoint format. */
+async function writeHarnessBadges(outputDirectory, groups) {
+  const files = {};
   for (const [harness, group] of Object.entries(groups ?? {})) {
     if (!/^[a-z0-9][a-z0-9._-]*$/u.test(harness)) continue;
     const score = group.score ?? null;
@@ -506,11 +478,7 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
     bytes: Buffer.byteLength(viewsContent),
     sha256: createHash("sha256").update(viewsContent).digest("hex"),
   };
-  const badges = await writeBadges(outputDirectory, views.groups.harnessFamily, {
-    observations: allTrials.length,
-    models: Object.keys(views.groups.modelFamily).length,
-    setups: leaderboardRows.length,
-  });
+  const badges = await writeHarnessBadges(outputDirectory, views.groups.harnessFamily);
   if (badges) index.badges = badges;
   const leaderboardContent = JSON.stringify(leaderboard, null, 2) + "\n";
   await writeFile(path.join(outputDirectory, "leaderboard.json"), leaderboardContent);
@@ -522,6 +490,8 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
   const summary = {
     schemaVersion: 1,
     ...summarizeTrials(allTrials),
+    models: Object.keys(views.groups.modelFamily).length,
+    setups: leaderboardRows.length,
     efficiency: summarizeEfficiency(allTrials, allRounds),
   };
   const summaryContent = JSON.stringify(summary, null, 2) + "\n";
