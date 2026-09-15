@@ -10,7 +10,7 @@
   <a href="https://github.com/alexshpunt/explicit-edit-benchmark/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/alexshpunt/explicit-edit-benchmark/ci.yml?branch=main&label=CI%2FCD" alt="CI/CD status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dataset-Hugging%20Face-f0c04a" alt="Hugging Face Dataset"></a>
-  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/ranking-Explorer-2f6fe4" alt="Benchmark Explorer"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/leaderboard-Explorer-2f6fe4" alt="Benchmark leaderboard"></a>
 </p>
 
 <p align="center">
