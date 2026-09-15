@@ -12,6 +12,9 @@
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dataset-Hugging%20Face-f0c04a" alt="Hugging Face Dataset"></a>
   <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/ranking-Explorer-2f6fe4" alt="Benchmark Explorer"></a>
   <img src="https://img.shields.io/badge/tasks-226%20exact%20edits-54d1a0" alt="226 tasks">
+  <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-observations.json" alt="Accepted benchmark observations"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-models.json" alt="Models in the benchmark dataset"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/endpoint?url=https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/badges/dataset-setups.json" alt="Setups in the benchmark dataset"></a>
   <img src="https://img.shields.io/badge/node-24%2B-informational" alt="Node.js 24 or newer">
 </p>
 
@@ -94,16 +97,6 @@ Then the command does the rest:
 **If step 3 fails, the command stops there**, so a misconfiguration costs you a minute instead of a full run. That check is part of the command rather than something you have to remember.
 
 Every run sees the same 226 tasks. A run is grouped with others only when the rules match: how many recovery attempts it allows, how long one attempt may take, the task set, and the verifier. How many trials ran at once is recorded too, but it does not separate groups, because it is scheduling rather than a rule; it shows up in timings, and under contention sometimes in failures. If a harness needs longer, raise `--timeout-seconds`, and the result is compared with runs that used the same timeout.
-
-### Compare Pi editing extensions
-
-The repository also pins 25 published editing extensions to one clean Pi `0.85.1` setup. Each supported arm runs on `openai-codex/gpt-5.6-luna` at low reasoning and records the exact npm version and active tool surface. Run one arm with:
-
-```sh
-npm run benchmark:extension:submit -- --extension pi-semantic-edit --auth-file ~/.pi/agent/auth.json
-```
-
-The command installs Pi and the extension into a temporary directory, disables discovered Pi resources, runs the smoke and full observation, and opens a Dataset pull request. See [Pi extension arms](docs/running.md#pi-extension-arms) for the pinned catalog and compatibility notes.
 
 Some agents need a provider route or a credential file. That is one more flag on the same command:
 
