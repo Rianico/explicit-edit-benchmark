@@ -14,10 +14,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tasks-226%20exact%20edits-54d1a0" alt="226 tasks">
-  <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.observations&label=observations&color=54d1a0" alt="Accepted benchmark observations"></a>
-  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.models&label=models&color=54d1a0" alt="Models in the benchmark dataset"></a>
-  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.setups&label=setups&color=54d1a0" alt="Setups in the benchmark dataset"></a>
+  <img src="https://img.shields.io/badge/tasks-226%20exact%20edits-blue" alt="226 tasks">
+  <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.observations&label=observations&color=blue" alt="Accepted benchmark observations"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.models&label=models&color=blue" alt="Models in the benchmark dataset"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.setups&label=setups&color=blue" alt="Setups in the benchmark dataset"></a>
 </p>
 
 The tasks are small on purpose. None of them needs deep reasoning or domain knowledge: the agent finds the right text, changes it, and leaves every other byte as it was. That keeps the attention on what actually differs between setups, which is the model, the tools, and the harness around them.
