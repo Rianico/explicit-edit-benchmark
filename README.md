@@ -4,7 +4,7 @@
 
 <h1 align="center">Explicit Edit Benchmark</h1>
 
-<p align="center">Measure how well a model and an agent harness work together on precise text edits, then publish the result so others can compare.</p>
+<p align="center">Explicit Edit is an open benchmark for measuring how accurately coding agents and agent harnesses edit files across 226 deterministic, byte-exact tasks.</p>
 
 <p align="center">
   <a href="https://github.com/alexshpunt/explicit-edit-benchmark/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/alexshpunt/explicit-edit-benchmark/ci.yml?branch=main&label=CI%2FCD" alt="CI/CD status"></a>
