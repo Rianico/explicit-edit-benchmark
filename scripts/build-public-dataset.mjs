@@ -100,6 +100,8 @@ function datasetCard({ includeSubmissions = false, models = [] } = {}) {
     "",
     "226 deterministic exact-edit tasks, run by different agents, harnesses, models and configurations. Every observation records what the harness did and whether the resulting files matched byte for byte.",
     "",
+    "**Source code and benchmark runner:** [GitHub — Explicit Edit Benchmark](https://github.com/alexshpunt/explicit-edit-benchmark)",
+    "",
     "**[Open the interactive Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer)** to compare agents, harnesses, models, versions, reasoning modes, correctness, recovery, time, cost and tokens.",
     "",
     ...(models.length
