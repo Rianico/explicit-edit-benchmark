@@ -16,6 +16,10 @@ name: Submit an existing official result
         description: Approved reusable workflow commit that signed the result
         required: true
         type: string
+      policy_sha:
+        description: Release commit containing the approval policy
+        required: true
+        type: string
       dataset_repository:
         description: Hugging Face Dataset receiving the candidate
         required: true
@@ -38,7 +42,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 1f8271960be350bae2f92191f942d6ef418df08c
+          ref: ${{ inputs.policy_sha }}
           persist-credentials: false
 
       - name: Setup Node

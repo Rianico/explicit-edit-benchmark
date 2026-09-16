@@ -7,10 +7,10 @@ const current = "b".repeat(40);
 const policy = "c".repeat(40);
 
 test("one derived workflow SHA updates both caller pins", () => {
-  const template = `uses: owner/repo/.github/workflows/official-run.yml@${old}\nsigner_sha: ${old}\nuses: owner/repo/.github/workflows/official-submit.yml@${old}\n`;
+  const template = `uses: owner/repo/.github/workflows/official-run.yml@${old}\nsigner_sha: ${old}\nuses: owner/repo/.github/workflows/official-submit.yml@${old}\npolicy_sha: ${old}\n`;
   assert.equal(
     pinCallerTemplate(template, current, policy),
-    `uses: owner/repo/.github/workflows/official-run.yml@${current}\nsigner_sha: ${current}\nuses: owner/repo/.github/workflows/official-submit.yml@${policy}\n`,
+    `uses: owner/repo/.github/workflows/official-run.yml@${current}\nsigner_sha: ${current}\nuses: owner/repo/.github/workflows/official-submit.yml@${policy}\npolicy_sha: ${policy}\n`,
   );
 });
 
