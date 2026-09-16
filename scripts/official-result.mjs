@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { executionIdentity } from "./official-identities.mjs";
 import { approvedWorkflow, loadOfficialPolicy } from "./official-policy.mjs";
 import { validateNormalizedRun } from "./validate-normalized-run.mjs";
 import { explicitEditTasks } from "../src/suites/explicit-edit/fixtures.ts";
+import { verifierSha256 } from "./verifier-identity.mjs";
 
 const SHA256 = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
@@ -88,6 +90,17 @@ export async function validateOfficialManifest(
   const manifest = JSON.parse(await readFile(path.resolve(manifestFile), "utf8"));
   const policy = await loadOfficialPolicy(policyFile);
   const workflow = approvedWorkflow(policy, signerSha);
+  const canonicalTasks = explicitEditTasks();
+  const canonicalTaskSetSha256 = createHash("sha256")
+    .update(JSON.stringify(canonicalTasks))
+    .digest("hex");
+  const canonicalVerifierSha256 = verifierSha256(
+    await readFile(new URL("../src/suites/explicit-edit/files.ts", import.meta.url)),
+  );
+  if (policy.runner.taskSetSha256 !== canonicalTaskSetSha256)
+    throw Error("release policy: canonical task set does not match trusted runner");
+  if (policy.runner.verifierSha256 !== canonicalVerifierSha256)
+    throw Error("release policy: verifier does not match trusted runner");
   exactKeys(
     manifest,
     [
