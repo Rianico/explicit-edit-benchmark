@@ -64,40 +64,41 @@ function callFromItem(item, index) {
 export function metricsFromTimeline(events) {
   const calls = [];
   const errors = [];
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 };
   let modelRounds = 0;
-  let usage = null;
+  let observedResponses = 0;
   for (const [index, event] of events.entries()) {
-    if (event?.type === "turn/started") modelRounds += 1;
+    if (event?.type === "thread/contextWindowUsage/updated") observedResponses += 1;
     if (event?.type === "turn/completed" && event.data?.status !== "completed") errors.push(event);
     if (event?.type === "item/completed") {
       const call = callFromItem(event.data?.item, index);
       if (call) calls.push(call);
     }
     if (event?.type === "thread/tokenUsage/updated") {
-      const total = event.data?.tokenUsage?.total;
-      if (total)
-        usage = {
-          input: total.inputTokens ?? null,
-          output: total.outputTokens ?? null,
-          cacheRead: total.cachedInputTokens ?? null,
-          // bb totals input, cached input, and output, so its accounting has no cache-write part.
-          cacheWrite: 0,
-          totalTokens: total.totalTokens ?? null,
-        };
+      // `total` is cumulative across the thread; summing it would count earlier responses again.
+      const last = event.data?.tokenUsage?.last;
+      if (last) {
+        modelRounds += 1;
+        usage.input += last.inputTokens ?? 0;
+        usage.output += last.outputTokens ?? 0;
+        usage.cacheRead += last.cachedInputTokens ?? 0;
+        usage.totalTokens += last.totalTokens ?? 0;
+      }
     }
   }
+  const completeUsage = observedResponses === 0 || modelRounds >= observedResponses;
   return {
     calls,
     toolCalls: calls.length,
-    modelRounds,
+    modelRounds: Math.max(modelRounds, observedResponses),
     errors,
     eventCount: events.length,
     costUsd: null,
-    inputTokens: usage?.input ?? null,
-    outputTokens: usage?.output ?? null,
-    cacheReadTokens: usage?.cacheRead ?? null,
-    cacheWriteTokens: usage?.cacheWrite ?? null,
-    totalTokens: usage?.totalTokens ?? null,
+    inputTokens: modelRounds && completeUsage ? usage.input : null,
+    outputTokens: modelRounds && completeUsage ? usage.output : null,
+    cacheReadTokens: modelRounds && completeUsage ? usage.cacheRead : null,
+    cacheWriteTokens: modelRounds && completeUsage ? usage.cacheWrite : null,
+    totalTokens: modelRounds && completeUsage ? usage.totalTokens : null,
     failedToolCalls: null,
     invalidToolCalls: null,
   };
