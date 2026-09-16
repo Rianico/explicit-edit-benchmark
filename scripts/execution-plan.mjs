@@ -30,6 +30,9 @@ function adapterRecipe(id) {
       ...(adapter.extensionPackage
         ? [{ role: "extension", name: adapter.extensionPackage, versionInput: "harnessVersion" }]
         : []),
+      ...(adapter.runtimePackage
+        ? [{ role: "runtime", name: adapter.runtimePackage, versionInput: "runtimeVersion" }]
+        : []),
     ],
     providers: ["openai-codex"],
     credentialSchemas: { "openai-codex": OAUTH_SCHEMA },
@@ -56,9 +59,11 @@ function validateInput(input) {
   if (!adapter) throw Error(`Unknown adapter: ${input?.adapter}`);
   const fields = ["adapter", "agentVersion", "provider", "model", "reasoning"];
   if (adapter.extensionPackage) fields.push("harnessVersion");
+  if (adapter.runtimePackage) fields.push("runtimeVersion");
   exactKeys(input, fields, "official input");
   exactVersion(input.agentVersion, "agentVersion");
   if (input.harnessVersion !== undefined) exactVersion(input.harnessVersion, "harnessVersion");
+  if (input.runtimeVersion !== undefined) exactVersion(input.runtimeVersion, "runtimeVersion");
   if (!adapter.providers.includes(input.provider))
     throw Error(`Unsupported provider: ${input.provider}`);
   if (!MODEL.test(input.model) || !input.model.startsWith(`${input.provider}/`))
