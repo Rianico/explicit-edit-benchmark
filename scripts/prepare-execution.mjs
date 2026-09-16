@@ -99,6 +99,10 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
       const database = path.join(ompHome, "agent.db");
       await chmod(database, 0o600);
       args.push("--auth-file", database);
+      const envFile = await privateJson(path.join(directory, "omp-env.json"), {
+        PATH: `${path.join(runtime, "node_modules", ".bin")}:/usr/local/bin:/usr/bin:/bin`,
+      });
+      args.push("--env-file", envFile);
       break;
     }
     case "copilot": {
