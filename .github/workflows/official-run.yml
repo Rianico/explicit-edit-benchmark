@@ -38,21 +38,11 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Resolve pinned reusable workflow revision
-        id: source
-        env:
-          WORKFLOW_REF: ${{ github.workflow_ref }}
-        run: |
-          set -euo pipefail
-          revision="${WORKFLOW_REF##*@}"
-          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-
       - name: Checkout pinned benchmark
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: ${{ steps.source.outputs.revision }}
+          ref: 7e2bfd95cf21571be139fb58af2d83ebf1d862a2
           persist-credentials: false
 
       - name: Setup Node
@@ -123,14 +113,14 @@ jobs:
               runId: process.env.GITHUB_RUN_ID,
               runAttempt: process.env.GITHUB_RUN_ATTEMPT,
               workflowRef: process.env.GITHUB_WORKFLOW_REF,
-              workflowSha: process.argv[1],
+              runnerSha: process.argv[1],
               task: process.env.TASK,
             };
             fs.writeFileSync(
               process.argv[2],
               JSON.stringify(manifest, null, 2) + "\n",
             );
-          ' "${{ steps.source.outputs.revision }}" \
+          ' "7e2bfd95cf21571be139fb58af2d83ebf1d862a2" \
             "results/$run_id/official-manifest.json"
           tar --create --gzip --file "$artifact" \
             -C "results/$run_id" official-manifest.json normalized
