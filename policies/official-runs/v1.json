@@ -37,6 +37,11 @@
       "sha": "f701c38b5e76201fa44bb9fa8836a3c5dd188d8f",
       "runnerSha": "0eb81b72b4986df72207bfef822137320c360053",
       "status": "active"
+    },
+    {
+      "sha": "cfa0e8e0d1b6ea07146b52840eb462fc8c1af33c",
+      "runnerSha": "cfa0e8e0d1b6ea07146b52840eb462fc8c1af33c",
+      "status": "active"
     }
   ],
   "benchmark": {
@@ -953,7 +958,9 @@
       }
     ]
   },
-  "normalizedSchemas": [1],
+  "normalizedSchemas": [
+    1
+  ],
   "runPolicy": {
     "partialRuns": true,
     "oracleRecoveries": 0,
