@@ -1,0 +1,174 @@
+---
+name: Auto-accept official observations
+
+"on":
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Optional single Hugging Face candidate number
+        required: false
+        type: string
+      oidc_check_only:
+        description: Check a scoped short-lived token without publishing
+        required: false
+        default: false
+        type: boolean
+      rebuild_only:
+        description: Rebuild canonical views without processing a candidate
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: Verify and build a verdict without publishing
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: huggingface-dataset-alexshpunt-explicit-edit-benchmark
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout acceptance policy
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Check production kill switch
+        id: gate
+        env:
+          AUTO_ACCEPT_ENABLED: ${{ vars.OFFICIAL_AUTO_ACCEPT_ENABLED }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REBUILD_ONLY: ${{ inputs.rebuild_only }}
+          OIDC_CHECK_ONLY: ${{ inputs.oidc_check_only }}
+        run: |
+          enabled=false
+          if [[ "$AUTO_ACCEPT_ENABLED" = "true" || "$DRY_RUN" = "true" || \
+                "$REBUILD_ONLY" = "true" || "$OIDC_CHECK_ONLY" = "true" ]]; then
+            enabled=true
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+          if [[ "$enabled" != "true" ]]; then
+            echo "## Official auto-accept is disabled" >> "$GITHUB_STEP_SUMMARY"
+            message="Set OFFICIAL_AUTO_ACCEPT_ENABLED=true"
+            message="$message to resume scheduled imports."
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Confirm OIDC token cannot target another Dataset
+        if: steps.gate.outputs.enabled == 'true' && inputs.oidc_check_only
+        env:
+          HF_OIDC_RESOURCE: datasets/alexshpunt/explicit-edit-benchmark-denied
+        run: |
+          set -euo pipefail
+          oidc_response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https%3A%2F%2Fhuggingface.co")
+          subject_token=$(jq --exit-status --raw-output \
+            .value <<<"$oidc_response")
+          request=$(jq --null-input --compact-output \
+            --arg token "$subject_token" \
+            --arg resource "$HF_OIDC_RESOURCE" \
+            '{
+              grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+              subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              subject_token: $token,
+              resource: $resource
+            }')
+          status=$(curl --silent --output "$RUNNER_TEMP/hf-denied.json" \
+            --write-out '%{http_code}' \
+            --header "Content-Type: application/json" \
+            --data "$request" \
+            https://huggingface.co/oauth/token)
+          test "$status" = "400"
+          test "$(jq --raw-output .error "$RUNNER_TEMP/hf-denied.json")" = \
+            "invalid_grant"
+
+      - name: Exchange GitHub identity for scoped Hugging Face token
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          HF_OIDC_RESOURCE: datasets/alexshpunt/explicit-edit-benchmark
+        run: |
+          set -euo pipefail
+          oidc_response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https%3A%2F%2Fhuggingface.co")
+          subject_token=$(jq --exit-status --raw-output \
+            .value <<<"$oidc_response")
+          request=$(jq --null-input --compact-output \
+            --arg token "$subject_token" \
+            --arg resource "$HF_OIDC_RESOURCE" \
+            '{
+              grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+              subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              subject_token: $token,
+              resource: $resource
+            }')
+          response=$(curl --fail-with-body --silent --show-error \
+            --header "Content-Type: application/json" \
+            --data "$request" \
+            https://huggingface.co/oauth/token)
+          token=$(jq --exit-status --raw-output .access_token <<<"$response")
+          test "$(jq --raw-output .token_type <<<"$response")" = "bearer"
+          test "$(jq --raw-output .expires_in <<<"$response")" = "3600"
+          echo "::add-mask::$token"
+          printf 'HF_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Verify and publish official candidates
+        id: acceptance
+        if: steps.gate.outputs.enabled == 'true' && !inputs.oidc_check_only
+        env:
+          DATASET_REPOSITORY: alexshpunt/explicit-edit-benchmark
+          CANDIDATE: ${{ inputs.candidate }}
+          MAX_CANDIDATES: "4"
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/acceptance-result.json"
+          if [[ "${{ inputs.rebuild_only }}" = "true" ]]; then
+            node scripts/official-acceptance-cli.mjs rebuild | tee "$result"
+          elif [[ -n "$CANDIDATE" ]]; then
+            node scripts/official-acceptance-cli.mjs accept \
+              "$CANDIDATE" | tee "$result"
+          else
+            node scripts/official-acceptance-cli.mjs poll | tee "$result"
+          fi
+
+      - name: Summarize acceptance batch
+        if: always() && steps.acceptance.outcome != 'skipped'
+        run: |
+          result="$RUNNER_TEMP/acceptance-result.json"
+          if [[ ! -s "$result" ]]; then
+            echo "## Official acceptance failed before producing a verdict" >> \
+              "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          jq --raw-output '
+            "## Official acceptance\n" +
+            "- discovered: " + ((.candidates // 0) | tostring) + "\n" +
+            "- accepted/duplicate: " +
+              ((.accepted // []) | length | tostring) + "\n" +
+            "- rejected: " + ((.rejected // []) | length | tostring) + "\n" +
+            "- deferred: " + ((.deferred // []) | length | tostring) + "\n" +
+            "- dry run: " + ((.dryRun // false) | tostring) + "\n" +
+            "- Dataset commit: " + (.commitOid // "none")
+          ' "$result" >> "$GITHUB_STEP_SUMMARY"

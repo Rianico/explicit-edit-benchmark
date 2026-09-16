@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createWriteStream, realpathSync } from "node:fs";
 import { cp, mkdir, copyFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -194,7 +194,11 @@ export async function runHarness(adapter, { workspace, state, artifacts, prompt,
   const args = [
     "--die-with-parent",
     "--unshare-user",
-    "--disable-userns",
+    ...(execFileSync("/usr/bin/bwrap", ["--help"], { encoding: "utf8" }).includes(
+      "--disable-userns",
+    )
+      ? ["--disable-userns"]
+      : []),
     "--unshare-pid",
     "--unshare-ipc",
     "--unshare-uts",

@@ -1,0 +1,381 @@
+---
+name: Official benchmark run
+
+"on":
+  workflow_call:
+    inputs:
+      model:
+        description: Exact Pi model id
+        required: true
+        type: string
+      thinking:
+        description: Pi reasoning level
+        required: true
+        type: string
+      task:
+        description: One registered benchmark task for the first live smoke
+        required: false
+        default: replace-all-10-plain
+        type: string
+      adapter:
+        description: Registered official adapter id
+        required: false
+        default: pi-default
+        type: string
+      agent_version:
+        description: Exact published Pi Coding Agent version
+        required: true
+        type: string
+      harness_version:
+        description: Exact adapter package version when required
+        required: false
+        default: ""
+        type: string
+      runtime_version:
+        description: Exact auxiliary runtime package version when required
+        required: false
+        default: ""
+        type: string
+      provider:
+        description: Registered provider route
+        required: false
+        default: openai-codex
+        type: string
+    secrets:
+      pi_auth_json:
+        description: Pi auth.json used only by the measured process
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-22.04
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    steps:
+      - name: Resolve called workflow revision
+        id: revision
+        run: |
+          set -euo pipefail
+          response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=explicit-edit-official-run")
+          token=$(jq --raw-output .value <<<"$response")
+          workflow_ref=$(TOKEN="$token" node -e '
+            const payload = process.env.TOKEN.split(".")[1];
+            const claims = JSON.parse(Buffer.from(payload, "base64url"));
+            process.stdout.write(claims.job_workflow_ref ?? "");
+          ')
+          prefix="alexshpunt/explicit-edit-benchmark/.github/workflows/official-run.yml@"
+          sha="${workflow_ref#"$prefix"}"
+          test "$workflow_ref" = "$prefix$sha"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  produce:
+    needs: resolve
+    permissions:
+      contents: read
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.producer-artifact.outputs.artifact-id }}
+      archive-sha256: ${{ steps.bundle.outputs.sha256 }}
+
+    steps:
+      - name: Checkout pinned benchmark
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: alexshpunt/explicit-edit-benchmark
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install pinned benchmark prerequisites
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+
+      - name: Resolve plan, install packages, and select credentials
+        env:
+          ADAPTER: ${{ inputs.adapter }}
+          AGENT_VERSION: ${{ inputs.agent_version }}
+          HARNESS_VERSION: ${{ inputs.harness_version }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          THINKING: ${{ inputs.thinking }}
+          PI_AUTH_JSON: ${{ secrets.pi_auth_json }}
+        run: |
+          set -euo pipefail
+          umask 077
+          input="$RUNNER_TEMP/official-input.json"
+          plan="$RUNNER_TEMP/execution-plan.json"
+          raw_auth="$RUNNER_TEMP/pi-auth-source.json"
+          selected_auth="$RUNNER_TEMP/pi-auth.json"
+          runtime="$RUNNER_TEMP/pi-runtime"
+          node -e '
+            const input = {
+              adapter: process.env.ADAPTER,
+              agentVersion: process.env.AGENT_VERSION,
+              provider: process.env.PROVIDER,
+              model: process.env.MODEL,
+              reasoning: process.env.THINKING,
+            };
+            if (process.env.HARNESS_VERSION)
+              input.harnessVersion = process.env.HARNESS_VERSION;
+            if (process.env.RUNTIME_VERSION)
+              input.runtimeVersion = process.env.RUNTIME_VERSION;
+            const content = JSON.stringify(input);
+            require("node:fs").writeFileSync(process.argv[1], content);
+          ' "$input"
+          node scripts/execution-plan-cli.mjs resolve "$input" "$plan"
+          mapfile -t packages < <(
+            node -e '
+              const plan = require(process.argv[1]);
+              for (const item of plan.packages)
+                console.log(`${item.name}@${item.version}`);
+            ' "$plan"
+          )
+          mkdir -p "$runtime"
+          npm install --prefix "$runtime" -- "${packages[@]}"
+          node scripts/execution-plan-cli.mjs fingerprint \
+            "$runtime" "$plan" "$RUNNER_TEMP/installed-dependencies.json"
+          printf '%s' "$PI_AUTH_JSON" > "$raw_auth"
+          node scripts/execution-plan-cli.mjs credential \
+            "$raw_auth" "$plan" "$selected_auth"
+          echo "$runtime/node_modules/.bin" >> "$GITHUB_PATH"
+          prepare_args="$RUNNER_TEMP/prepare-args.json"
+          node scripts/prepare-execution.mjs \
+            --plan "$plan" --credential "$selected_auth" --runtime "$runtime" \
+            --directory "$RUNNER_TEMP/execution-private" \
+            --output "$prepare_args"
+          echo "EXECUTION_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "EXECUTION_PLAN=$plan" >> "$GITHUB_ENV"
+          echo "PREPARE_ARGS=$prepare_args" >> "$GITHUB_ENV"
+
+      - name: Run one registered task and export normalized evidence
+        env:
+          MODEL: ${{ inputs.model }}
+          THINKING: ${{ inputs.thinking }}
+          TASK: ${{ inputs.task }}
+          RUNNER_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/benchmark-config.json"
+          run_id="official-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mapfile -d '' -t prepare < <(
+            node -e '
+              for (const value of require(process.argv[1]))
+                process.stdout.write(value + "\0")
+            ' "$PREPARE_ARGS"
+          )
+          prepare+=(--output "$config")
+          node scripts/prepare-benchmark.mjs "${prepare[@]}"
+          npm run benchmark -- check --config "$config"
+          npm run benchmark -- raw-run \
+            --config "$config" \
+            --smoke \
+            --task "$TASK" \
+            --concurrency 1 \
+            --timeout-seconds 180 \
+            --run-id "$run_id"
+          npm run benchmark -- export "results/$run_id"
+          npm run benchmark -- inspect "results/$run_id/normalized"
+          RUN_DIRECTORY="results/$run_id" node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import path from "node:path";
+
+          const root = process.env.RUN_DIRECTORY;
+          const content = await readFile(
+            path.join(root, "normalized", "rounds.jsonl"),
+            "utf8",
+          );
+          const rows = content
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map(JSON.parse);
+          const technical = rows.find(
+            (row) => row.timedOut || row.exitCode !== 0,
+          );
+          if (technical) {
+            const stderr = await readFile(
+              path.join(
+                root,
+                "trials",
+                technical.trialId,
+                "agent",
+                "stderr.log",
+              ),
+              "utf8",
+            ).catch(() => "");
+            const reason = stderr
+              .split("\n")
+              .map((line) => line.trim())
+              .find(Boolean)
+              ?.replace(/[A-Za-z0-9_.-]{24,}/g, "…");
+            const detail = reason ? `: ${reason}` : "";
+            throw new Error(
+              `Technical smoke failure: exit=${technical.exitCode}${detail}`,
+            );
+          }
+          NODE
+
+          artifact="$RUNNER_TEMP/official-result.tar.gz"
+          options=$(node -e '
+            process.stdout.write(JSON.stringify({
+              policyId: "official-runs-v1",
+              repository: process.env.GITHUB_REPOSITORY,
+              runId: process.env.GITHUB_RUN_ID,
+              producerAttempt: process.env.GITHUB_RUN_ATTEMPT,
+              invocation: "benchmark",
+              callerSha: process.env.GITHUB_SHA,
+              workflowRef: process.env.GITHUB_WORKFLOW_REF,
+              runnerSha: process.env.RUNNER_SHA,
+              runnerOs: process.env.RUNNER_OS,
+              runnerArch: process.env.RUNNER_ARCH,
+              runnerImage: process.env.ImageOS ?? "unknown",
+            }));
+          ')
+          node --import tsx scripts/official-result.mjs build \
+            "results/$run_id/normalized" \
+            "results/$run_id/official-manifest.json" \
+            "$options"
+          cp "$EXECUTION_PLAN" "results/$run_id/execution-plan.json"
+          cp "$RUNNER_TEMP/installed-dependencies.json" \
+            "results/$run_id/installed-dependencies.json"
+          tar --create --gzip --file "$artifact" \
+            -C "results/$run_id" \
+            official-manifest.json execution-plan.json \
+            installed-dependencies.json normalized
+          digest=$(sha256sum "$artifact" | cut -d ' ' -f 1)
+          printf '%s  %s\n' "$digest" "official-result.tar.gz" \
+            > "$RUNNER_TEMP/official-result.sha256"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+        id: bundle
+
+      - name: Upload unsigned producer artifact
+        id: producer-artifact
+        # yamllint disable-line rule:line-length
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: official-producer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/official-result.tar.gz
+            ${{ runner.temp }}/official-result.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove credentials
+        if: always()
+        run: |
+          rm --force \
+            "$RUNNER_TEMP/pi-auth.json" \
+            "$RUNNER_TEMP/pi-auth-source.json"
+          rm --recursive --force "$RUNNER_TEMP/execution-private"
+
+  attest:
+    needs: [resolve, produce]
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pinned verifier and policy
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: alexshpunt/explicit-edit-benchmark
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install pinned verifier dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Download exact producer artifact by ID
+        # yamllint disable-line rule:line-length
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ needs.produce.outputs.artifact-id }}
+          path: ${{ runner.temp }}/official-producer
+
+      - name: Verify producer bytes, layout, manifest, and policy
+        env:
+          EXPECTED_SHA256: ${{ needs.produce.outputs.archive-sha256 }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/official-producer"
+          artifact="$root/official-result.tar.gz"
+          recorded=$(cut -d ' ' -f 1 "$root/official-result.sha256")
+          actual=$(sha256sum "$artifact" | cut -d ' ' -f 1)
+          test "$recorded" = "$EXPECTED_SHA256"
+          test "$actual" = "$EXPECTED_SHA256"
+          mkdir "$RUNNER_TEMP/official-extracted"
+          ARCHIVE="$artifact" OUTPUT="$RUNNER_TEMP/official-extracted" \
+            node --input-type=module <<'NODE'
+          import {
+            extractOfficialArchive,
+          } from "./scripts/official-verifier.mjs";
+          await extractOfficialArchive(process.env.ARCHIVE, process.env.OUTPUT);
+          NODE
+          node scripts/validate-normalized-run.mjs \
+            "$RUNNER_TEMP/official-extracted/normalized"
+          MANIFEST="$RUNNER_TEMP/official-extracted/official-manifest.json" \
+            RUNNER_SHA="${{ needs.resolve.outputs.sha }}" node -e '
+              const manifest = require(process.env.MANIFEST);
+              if (manifest.runnerSha !== process.env.RUNNER_SHA)
+                throw Error(
+                  "Producer runner SHA does not match called workflow",
+                );
+            '
+          echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
+
+      - name: Attest exact verified result archive
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ env.ARTIFACT }}
+
+      - name: Collect retained signed result
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          retained="$RUNNER_TEMP/official-retained"
+          mkdir "$retained"
+          cp "$ARTIFACT" "$retained/official-result.tar.gz"
+          cp \
+            "$RUNNER_TEMP/official-producer/official-result.sha256" \
+            "$retained/"
+          cp "$BUNDLE_PATH" "$retained/attestation.jsonl"
+
+      - name: Upload signed result and proof
+        # yamllint disable-line rule:line-length
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: official-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/official-retained/
+          if-no-files-found: error
+          retention-days: 14

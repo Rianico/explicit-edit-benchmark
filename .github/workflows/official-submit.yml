@@ -1,0 +1,142 @@
+---
+name: Submit an existing official result
+
+"on":
+  workflow_call:
+    inputs:
+      producer_run_id:
+        description: GitHub run that produced and attested the result
+        required: true
+        type: string
+      producer_attempt:
+        description: Producer run attempt retained in the artifact name
+        required: true
+        type: string
+      signer_sha:
+        description: Approved reusable workflow commit that signed the result
+        required: true
+        type: string
+      policy_sha:
+        description: Release commit containing the approval policy
+        required: true
+        type: string
+      dataset_repository:
+        description: Hugging Face Dataset receiving the candidate
+        required: true
+        type: string
+    secrets:
+      hf_token:
+        description: Contributor token allowed to open Dataset candidates
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  submit-only:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pinned delivery code and policy
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: alexshpunt/explicit-edit-benchmark
+          ref: ${{ inputs.policy_sha }}
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install pinned delivery dependencies
+        run: npm ci
+
+      - name: Download original producer artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          # yamllint disable-line rule:line-length
+          name: official-result-${{ inputs.producer_run_id }}-${{ inputs.producer_attempt }}
+          path: ${{ runner.temp }}/official-delivery
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.producer_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify retained bytes and provenance
+        env:
+          PRODUCER_REPOSITORY: ${{ github.repository }}
+          SIGNER_SHA: ${{ inputs.signer_sha }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/official-delivery"
+          artifact="$root/official-result.tar.gz"
+          expected=$(cut -d ' ' -f 1 "$root/official-result.sha256")
+          actual=$(sha256sum "$artifact" | cut -d ' ' -f 1)
+          test "$actual" = "$expected"
+          node scripts/verify-official-attestation.mjs \
+            "$artifact" \
+            "$root/attestation.jsonl" \
+            "$PRODUCER_REPOSITORY" \
+            policies/official-runs/v1.json \
+            "$SIGNER_SHA"
+          mkdir "$root/extracted"
+          tar -xzf "$artifact" -C "$root/extracted" official-manifest.json
+
+      - name: Deliver exact signed bytes with bounded retry
+        id: delivery
+        continue-on-error: true
+        env:
+          HF_TOKEN: ${{ secrets.hf_token }}
+          SIGNER_SHA: ${{ inputs.signer_sha }}
+          DATASET_REPOSITORY: ${{ inputs.dataset_repository }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/official-delivery"
+          node scripts/official-delivery-cli.mjs \
+            --artifact "$root/official-result.tar.gz" \
+            --attestation "$root/attestation.jsonl" \
+            --manifest "$root/extracted/official-manifest.json" \
+            --signer-sha "$SIGNER_SHA" \
+            --repository "$DATASET_REPOSITORY" \
+            --status-file "$root/delivery-status.json" \
+            --wait-for-acceptance
+
+      - name: Record terminal delivery failure
+        if: steps.delivery.outcome == 'failure'
+        env:
+          PRODUCER_RUN_ID: ${{ inputs.producer_run_id }}
+        run: |
+          node -e '
+            const status = {
+              schemaVersion: 1,
+              status: "delivery-failed",
+              producerRunId: process.env.PRODUCER_RUN_ID,
+              reason: "validation-or-authentication",
+            };
+            require("node:fs").writeFileSync(
+              `${process.env.RUNNER_TEMP}/official-delivery/delivery-status.json`,
+              `${JSON.stringify(status, null, 2)}\n`,
+            );
+          '
+
+      - name: Publish delivery status
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          # yamllint disable-line rule:line-length
+          name: official-delivery-${{ inputs.producer_run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/official-delivery/delivery-status.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize delivery state
+        if: always()
+        run: |
+          status="$RUNNER_TEMP/official-delivery/delivery-status.json"
+          cat "$status" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on terminal delivery error
+        if: steps.delivery.outcome == 'failure'
+        run: exit 1

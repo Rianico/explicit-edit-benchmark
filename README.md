@@ -71,12 +71,34 @@ You install and sign in to that CLI yourself. The benchmark leaves your CLI alon
 
 For anything not in this list you write your own adapter. [Benchmark automation and public data](docs/benchmark-automation.md) documents the config API, and [examples/bb](examples/bb/benchmark.config.mjs) is a worked example for a harness that is more than one CLI call: it starts a server, runs another agent in a thread, and reads that thread's timeline. We ship the example and a smoke run, not a bb result.
 
-## Run it
+## Run and publish
 
-One command does the whole run. You choose the harness, the exact model, and the reasoning level:
+Choose whether the observation is verified on GitHub or runs on your machine. Both paths use one command.
+
+For a verified observation:
 
 ```sh
-npm run benchmark:submit -- --harness pi-default --model PROVIDER/MODEL --thinking high --concurrency 10
+npm run benchmark -- run --official --harness pi-default \
+  --model openai-codex/gpt-5.6-luna --thinking low
+```
+
+The first invocation checks `gh` and `hf` login, creates your public caller repository from the approved template when needed, copies your local Pi and Hugging Face credentials into GitHub Actions secrets through stdin, starts the workflow, and waits until the result is accepted. Credentials are never placed in command arguments. Use `--task TASK_ID` for another partial run, `--caller-repository OWNER/REPO` for an existing caller, or `--no-wait` to return after dispatch.
+
+For an ordinary unverified observation:
+
+```sh
+npm run benchmark -- run --local --harness pi-default \
+  --model openai-codex/gpt-5.6-luna --thinking low
+```
+
+Local mode keeps the existing smoke gate, runs the complete task set, validates the result, and opens the Dataset contribution. The Dataset marks approved GitHub workflow results as `verified` and ordinary local contributions as `unverified`. Both remain visible. See [Official community runs](docs/official-community-runs.md) for the trust boundary and recovery path.
+
+## Local options
+
+The local command accepts the existing submission options. Its lower-level equivalent is:
+
+```sh
+npm run benchmark:submit -- --harness pi-default --model PROVIDER/MODEL --thinking low --concurrency 10
 ```
 
 You can run that yourself, or hand your coding agent this repository link and let it do the work: the skills in `.agents/skills/` know how to route a harness to your account, run the observation, and open the pull request. Ask it to publish a result and it will use them.
@@ -153,13 +175,14 @@ It runs formatting, linting, type checks, the unit and integration tests, and on
 
 ## Where to read more
 
-| Document                                                             | What it adds                                                                       |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [Configuration guide](docs/running.md)                               | Per-adapter model and auth details, provider routes, mounts, lower-level commands  |
-| [Share a result](docs/contributing-results.md)                       | The submission flow step by step, and what happens after you open the pull request |
-| [Benchmark automation and public data](docs/benchmark-automation.md) | The config API, the normalized data format, and the Dataset views                  |
-| [Methodology](docs/methodology.md)                                   | How tasks are generated, what the scores mean, and how recovery works              |
-| [Architecture](docs/architecture.md)                                 | Where each fact lives, and which layer owns what                                   |
+| Document                                                             | What it adds                                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [Official community runs](docs/official-community-runs.md)           | GitHub template, verified provenance, automatic acceptance, and submit-only recovery |
+| [Configuration guide](docs/running.md)                               | Per-adapter model and auth details, provider routes, mounts, lower-level commands    |
+| [Share a result](docs/contributing-results.md)                       | The submission flow step by step, and what happens after you open the pull request   |
+| [Benchmark automation and public data](docs/benchmark-automation.md) | The config API, the normalized data format, and the Dataset views                    |
+| [Methodology](docs/methodology.md)                                   | How tasks are generated, what the scores mean, and how recovery works                |
+| [Architecture](docs/architecture.md)                                 | Where each fact lives, and which layer owns what                                     |
 
 ## Skills for coding agents
 
