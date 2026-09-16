@@ -114,7 +114,7 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
         id: "openai-codex",
         transport: "direct-responses",
         apiKeyEnv: "OPENAI_CODEX_ACCESS_TOKEN",
-        endpoints: { responses: "https://api.openai.com/v1" },
+        endpoints: { responses: "https://chatgpt.com/backend-api/codex" },
         copilotWireApi: "responses",
         copilotCredentialType: "bearer",
         copilotHeadersEnv: "OPENAI_CODEX_HEADERS",
