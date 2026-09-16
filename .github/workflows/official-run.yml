@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 0eb81b72b4986df72207bfef822137320c360053
+          ref: 8c44d544eb7620871b115a64690888137adeff19
           persist-credentials: false
 
       - name: Setup Node
@@ -105,7 +105,7 @@ jobs:
             const content = JSON.stringify(input);
             require("node:fs").writeFileSync(process.argv[1], content);
           ' "$input"
-          node scripts/official-registry-cli.mjs resolve "$input" "$plan"
+          node scripts/execution-plan-cli.mjs resolve "$input" "$plan"
           mapfile -t packages < <(
             node -e '
               const plan = require(process.argv[1]);
@@ -115,14 +115,20 @@ jobs:
           )
           mkdir -p "$runtime"
           npm install --prefix "$runtime" -- "${packages[@]}"
-          node scripts/official-registry-cli.mjs fingerprint \
+          node scripts/execution-plan-cli.mjs fingerprint \
             "$runtime" "$plan" "$RUNNER_TEMP/installed-dependencies.json"
           printf '%s' "$PI_AUTH_JSON" > "$raw_auth"
-          node scripts/official-registry-cli.mjs credential \
+          node scripts/execution-plan-cli.mjs credential \
             "$raw_auth" "$plan" "$selected_auth"
           echo "$runtime/node_modules/.bin" >> "$GITHUB_PATH"
-          echo "PI_RUNTIME=$runtime" >> "$GITHUB_ENV"
-          echo "OFFICIAL_PLAN=$plan" >> "$GITHUB_ENV"
+          prepare_args="$RUNNER_TEMP/prepare-args.json"
+          node scripts/prepare-execution.mjs \
+            --plan "$plan" --credential "$selected_auth" --runtime "$runtime" \
+            --directory "$RUNNER_TEMP/execution-private" \
+            --output "$prepare_args"
+          echo "EXECUTION_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "EXECUTION_PLAN=$plan" >> "$GITHUB_ENV"
+          echo "PREPARE_ARGS=$prepare_args" >> "$GITHUB_ENV"
 
       - name: Run one registered task and export normalized evidence
         env:
@@ -133,24 +139,16 @@ jobs:
           set -euo pipefail
           config="$RUNNER_TEMP/benchmark-config.json"
           run_id="official-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          prepare=(
-            --harness "${{ inputs.adapter }}"
-            --model "$MODEL"
-            --thinking "$THINKING"
-            --command "$PI_RUNTIME/node_modules/.bin/pi"
-            --auth-file "$RUNNER_TEMP/pi-auth.json"
-            --runtime "$PI_RUNTIME"
-            --output "$config"
+          mapfile -d '' -t prepare < <(
+            node -e '
+              for (const value of require(process.argv[1]))
+                process.stdout.write(value + "\0")
+            ' "$PREPARE_ARGS"
           )
-          if [[ "${{ inputs.adapter }}" == "pi-agent-ide" ]]; then
-            prepare+=(
-              --ide-package "$PI_RUNTIME/node_modules/pi-agent-ide"
-              --harness-version "${{ inputs.harness_version }}"
-            )
-          fi
+          prepare+=(--output "$config")
           node scripts/prepare-benchmark.mjs "${prepare[@]}"
           npm run benchmark -- check --config "$config"
-          npm run benchmark -- run \
+          npm run benchmark -- raw-run \
             --config "$config" \
             --smoke \
             --task "$TASK" \
@@ -209,7 +207,7 @@ jobs:
               invocation: "benchmark",
               callerSha: process.env.GITHUB_SHA,
               workflowRef: process.env.GITHUB_WORKFLOW_REF,
-              runnerSha: "0eb81b72b4986df72207bfef822137320c360053",
+              runnerSha: "8c44d544eb7620871b115a64690888137adeff19",
               runnerOs: process.env.RUNNER_OS,
               runnerArch: process.env.RUNNER_ARCH,
               runnerImage: process.env.ImageOS ?? "unknown",
@@ -219,7 +217,7 @@ jobs:
             "results/$run_id/normalized" \
             "results/$run_id/official-manifest.json" \
             "$options"
-          cp "$OFFICIAL_PLAN" "results/$run_id/execution-plan.json"
+          cp "$EXECUTION_PLAN" "results/$run_id/execution-plan.json"
           cp "$RUNNER_TEMP/installed-dependencies.json" \
             "results/$run_id/installed-dependencies.json"
           tar --create --gzip --file "$artifact" \
@@ -250,6 +248,7 @@ jobs:
           rm --force \
             "$RUNNER_TEMP/pi-auth.json" \
             "$RUNNER_TEMP/pi-auth-source.json"
+          rm --recursive --force "$RUNNER_TEMP/execution-private"
 
   attest:
     needs: produce
@@ -266,7 +265,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 4d1f3cb87ad8aabb42fd17b3134d5bffee0c3c65
+          ref: 9b523f4c3fca21dc091efbbb919d86a9294fa71d
           persist-credentials: false
 
       - name: Setup Node
@@ -308,7 +307,7 @@ jobs:
             "$RUNNER_TEMP/official-extracted/official-manifest.json" \
             "$RUNNER_TEMP/official-extracted/normalized" \
             policies/official-runs/v1.json \
-            0eb81b72b4986df72207bfef822137320c360053
+            8c44d544eb7620871b115a64690888137adeff19
           echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
 
       - name: Attest exact verified result archive

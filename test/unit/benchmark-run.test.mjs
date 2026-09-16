@@ -12,7 +12,15 @@ test("one run command requires an explicit official or local mode", () => {
     /exactly one/,
   );
   assert.equal(
-    parseRunOptions(["--official", "--harness", "pi-default", "--model", "m"]).thinking,
+    parseRunOptions([
+      "--official",
+      "--harness",
+      "pi-default",
+      "--model",
+      "m",
+      "--agent-version",
+      "1.2.3",
+    ]).thinking,
     "low",
   );
 });
