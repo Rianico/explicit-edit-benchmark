@@ -33,6 +33,19 @@ await test("a published configuration can be re-hashed after a documented rename
   assert.notEqual(renamed.configurationHash, row.configurationHash);
   assert.deepEqual(Object.keys(renamed), Object.keys(row));
 });
+await test("owner and display labels do not change configuration identity", () => {
+  const original = safeConfiguration(adapter);
+  const renamed = safeConfiguration({
+    ...adapter,
+    owner: "another-contributor",
+    displayLabel: "A nicer name",
+  });
+  assert.equal(renamed.configurationHash, original.configurationHash);
+  assert.notEqual(
+    safeConfiguration({ ...adapter, model: "openai-codex/another-model" }).configurationHash,
+    original.configurationHash,
+  );
+});
 
 await test("a declared harness version has to be one the bundle actually ran", () => {
   const harnesses = [{ id: "opencode-default", version: "1.16.2" }];

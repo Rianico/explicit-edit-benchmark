@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 91d20ec1871e513f0b28570cfb2e4f0e09858d56
+          ref: 772c4b7f7eb810459d9fba0b7fa02d95f448a87d
           persist-credentials: false
 
       - name: Setup Node
@@ -142,25 +142,25 @@ jobs:
           NODE
 
           artifact="$RUNNER_TEMP/official-result.tar.gz"
-          node -e '
-            const fs = require("node:fs");
-            const manifest = {
-              schemaVersion: 1,
-              verification: "verified",
-              source: "github-actions",
+          options=$(node -e '
+            process.stdout.write(JSON.stringify({
+              policyId: "official-runs-v1",
               repository: process.env.GITHUB_REPOSITORY,
               runId: process.env.GITHUB_RUN_ID,
-              runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+              producerAttempt: process.env.GITHUB_RUN_ATTEMPT,
+              invocation: "benchmark",
+              callerSha: process.env.GITHUB_SHA,
               workflowRef: process.env.GITHUB_WORKFLOW_REF,
-              runnerSha: process.argv[1],
-              task: process.env.TASK,
-            };
-            fs.writeFileSync(
-              process.argv[2],
-              JSON.stringify(manifest, null, 2) + "\n",
-            );
-          ' "91d20ec1871e513f0b28570cfb2e4f0e09858d56" \
-            "results/$run_id/official-manifest.json"
+              runnerSha: "772c4b7f7eb810459d9fba0b7fa02d95f448a87d",
+              runnerOs: process.env.RUNNER_OS,
+              runnerArch: process.env.RUNNER_ARCH,
+              runnerImage: process.env.ImageOS ?? "unknown",
+            }));
+          ')
+          node --import tsx scripts/official-result.mjs build \
+            "results/$run_id/normalized" \
+            "results/$run_id/official-manifest.json" \
+            "$options"
           tar --create --gzip --file "$artifact" \
             -C "results/$run_id" official-manifest.json normalized
           sha256sum "$artifact" | tee "$RUNNER_TEMP/official-result.sha256"
