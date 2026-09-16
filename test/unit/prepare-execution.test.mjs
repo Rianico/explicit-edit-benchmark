@@ -21,9 +21,15 @@ async function runtime(root, adapter) {
   const bin = path.join(root, "node_modules", ".bin");
   await mkdir(bin, { recursive: true });
   const executable = path.join(bin, definition.binary);
+  if (definition.credential === "omp") {
+    const bun = path.join(root, "node_modules", "@oven", "bun-linux-x64", "bin", "bun");
+    await mkdir(path.dirname(bun), { recursive: true });
+    await writeFile(bun, "#!/bin/sh\nexit 0\n");
+    await chmod(bun, 0o755);
+  }
   const script =
     definition.credential === "omp"
-      ? '#!/bin/sh\nmkdir -p "$PI_CODING_AGENT_DIR"\nprintf db > "$PI_CODING_AGENT_DIR/agent.db"\n'
+      ? '#!/bin/sh\ncommand -v bun >/dev/null\nmkdir -p "$PI_CODING_AGENT_DIR"\nprintf db > "$PI_CODING_AGENT_DIR/agent.db"\n'
       : "#!/bin/sh\nexit 0\n";
   await writeFile(executable, script);
   await chmod(executable, 0o755);
