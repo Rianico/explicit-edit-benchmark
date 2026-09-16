@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
@@ -385,6 +385,45 @@ function summarizeEfficiency(trials, rounds) {
   });
 }
 
+/** Read durable official provenance for one accepted run without inventing it for historical data. */
+export async function officialRunMetadata(storeDirectory, runId) {
+  const officialRoot = path.join(storeDirectory, "official");
+  let executionIds;
+  try {
+    executionIds = await readdir(officialRoot);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  for (const executionId of executionIds.sort()) {
+    const directory = path.join(officialRoot, executionId);
+    const [acceptance, transport] = await Promise.all([
+      readFile(path.join(directory, "acceptance.json"), "utf8").then(JSON.parse),
+      readFile(path.join(directory, "transport.json"), "utf8").then(JSON.parse),
+    ]);
+    const normalizedRunId =
+      acceptance.normalizedRunId ??
+      `official-${transport.producer.runId}-${transport.producer.producerAttempt}`;
+    if (normalizedRunId !== runId) continue;
+    if (acceptance.executionId !== executionId || transport.executionId !== executionId)
+      throw Error("Official proof identity mismatch for " + executionId);
+    return {
+      executionId,
+      proofPath: path.posix.join("source", "official", executionId),
+      artifactSha256: acceptance.artifactSha256,
+      workflow: {
+        repository: transport.producer.repository,
+        runId: transport.producer.runId,
+        attempt: transport.producer.producerAttempt,
+        signerSha: acceptance.signerWorkflowSha,
+      },
+      policyId: acceptance.policyId,
+      acceptedCandidateCommit: acceptance.candidateCommit,
+    };
+  }
+  return null;
+}
+
 /** Build a public dataset from every accepted observation in an ingestion store. */
 export async function buildPublicDatasetFromStore(
   outputDirectory,
@@ -427,19 +466,23 @@ export async function buildPublicDatasetFromStore(
     bytes: sourceIndexContent.byteLength,
     sha256: createHash("sha256").update(sourceIndexContent).digest("hex"),
   };
-  index.runs = index.runs.map((run) => {
-    const metadata = metadataByRun.get(run.runId);
-    if (!metadata) throw Error(`Missing submission metadata for ${run.runId}`);
-    return {
-      ...run,
-      submissionId: metadata.submissionId,
-      ownerId: metadata.ownerId,
-      purpose: metadata.purpose,
-      // Bundles accepted before source verification existed are the trusted initial corpus.
-      verification: metadata.verification ?? "verified",
-      definitions: metadata.definitions,
-    };
-  });
+  index.runs = await Promise.all(
+    index.runs.map(async (run) => {
+      const metadata = metadataByRun.get(run.runId);
+      if (!metadata) throw Error(`Missing submission metadata for ${run.runId}`);
+      const official = await officialRunMetadata(store, run.runId);
+      return {
+        ...run,
+        submissionId: metadata.submissionId,
+        ownerId: metadata.ownerId,
+        purpose: metadata.purpose,
+        // Bundles accepted before source verification existed are the trusted initial corpus.
+        verification: metadata.verification ?? "verified",
+        definitions: metadata.definitions,
+        ...(official ? { official } : {}),
+      };
+    }),
+  );
   const trialGroups = await Promise.all(
     index.runs.map(async (run) => ({
       runId: run.runId,
