@@ -26,3 +26,11 @@ To revoke future acceptance, change an approved workflow entry from `active` to 
 Task failures are measurements, not infrastructure failures. A selected subset is a valid `partial-measurement`. Failure before any task observation is an `infrastructure-failure`. Low score never changes admission.
 
 Ordinary reviewed Dataset contributions remain `unverified`. Both paths may contain partial runs and remain visible and filterable in the same Dataset.
+
+## Delivery recovery
+
+Inference, signing, and delivery are separate lifecycle stages. The attestation job uploads the original result archive, its digest, and its attestation as a retained GitHub Artifact before any Hugging Face request starts. A delivery failure therefore changes only delivery state; it never invalidates or repeats the measurement.
+
+Hugging Face delivery may retry a bounded number of HTTP 429 and 5xx responses with backoff. After that it records `delivery-failed` and leaves the original artifact available. A submit-only `workflow_dispatch` identifies the original GitHub run, downloads that exact artifact, verifies its digest and attestation again, and resends the same bytes. It cannot accept replacement normalized files and has no model credential.
+
+Repeated delivery keeps the original `executionId` and archive digest. The receiver treats the same pair as a no-op and different bytes for one execution as a conflict. Artifact retention defines the recovery window before acceptance. After acceptance, Hugging Face stores the archive, attestation, and receipt so recovery no longer depends on GitHub retention.
