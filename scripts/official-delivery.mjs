@@ -8,6 +8,14 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const defaultHub = { uploadFiles, whoAmI };
 
+/** Classify one transport identity before publication or acceptance. */
+export function classifyOfficialDelivery(existing, candidate) {
+  const match = existing.find((item) => item.executionId === candidate.executionId);
+  if (!match) return "new";
+  if (match.artifactSha256 === candidate.artifactSha256) return "duplicate";
+  return "conflict";
+}
+
 function retryable(error) {
   const status = error?.statusCode ?? error?.status ?? error?.response?.status;
   return status === 429 || (Number.isInteger(status) && status >= 500 && status <= 599);

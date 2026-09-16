@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  classifyOfficialDelivery,
   officialTransportMetadata,
   submitOfficialCandidate,
   withDeliveryRetry,
@@ -93,6 +94,22 @@ test("retry uploads the same bytes and keeps execution identity", async () => {
   assert.equal(uploads[0].length, 3);
   assert(uploads[0].every((file) => file.path.includes("a".repeat(64))));
   assert.equal(JSON.parse(await readFile(statusFile, "utf8")).executionId, "a".repeat(64));
+});
+
+test("delivery identity distinguishes no-op duplicates from conflicts", () => {
+  const existing = [{ executionId: "execution", artifactSha256: "digest" }];
+  assert.equal(
+    classifyOfficialDelivery(existing, { executionId: "other", artifactSha256: "digest" }),
+    "new",
+  );
+  assert.equal(
+    classifyOfficialDelivery(existing, { executionId: "execution", artifactSha256: "digest" }),
+    "duplicate",
+  );
+  assert.equal(
+    classifyOfficialDelivery(existing, { executionId: "execution", artifactSha256: "changed" }),
+    "conflict",
+  );
 });
 
 test("transport metadata is deterministic across submit attempts", async () => {
