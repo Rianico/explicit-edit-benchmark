@@ -101,6 +101,45 @@ jobs:
             --run-id "$run_id"
           npm run benchmark -- export "results/$run_id"
           npm run benchmark -- inspect "results/$run_id/normalized"
+          RUN_DIRECTORY="results/$run_id" node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import path from "node:path";
+
+          const root = process.env.RUN_DIRECTORY;
+          const content = await readFile(
+            path.join(root, "normalized", "rounds.jsonl"),
+            "utf8",
+          );
+          const rows = content
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map(JSON.parse);
+          const technical = rows.find(
+            (row) => row.timedOut || row.exitCode !== 0,
+          );
+          if (technical) {
+            const stderr = await readFile(
+              path.join(
+                root,
+                "trials",
+                technical.trialId,
+                "agent",
+                "stderr.log",
+              ),
+              "utf8",
+            ).catch(() => "");
+            const reason = stderr
+              .split("\n")
+              .map((line) => line.trim())
+              .find(Boolean)
+              ?.replace(/[A-Za-z0-9_.-]{24,}/g, "…");
+            const detail = reason ? `: ${reason}` : "";
+            throw new Error(
+              `Technical smoke failure: exit=${technical.exitCode}${detail}`,
+            );
+          }
+          NODE
 
           artifact="$RUNNER_TEMP/official-result.tar.gz"
           node -e '
