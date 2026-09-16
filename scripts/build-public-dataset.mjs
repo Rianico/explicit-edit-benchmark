@@ -416,6 +416,8 @@ export async function buildPublicDatasetFromStore(outputDirectory, storeDirector
       submissionId: metadata.submissionId,
       ownerId: metadata.ownerId,
       purpose: metadata.purpose,
+      // Bundles accepted before source verification existed are the trusted initial corpus.
+      verification: metadata.verification ?? "verified",
       definitions: metadata.definitions,
     };
   });
