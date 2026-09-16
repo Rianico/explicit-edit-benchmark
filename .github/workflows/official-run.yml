@@ -17,9 +17,24 @@ name: Official benchmark run
         required: false
         default: replace-all-10-plain
         type: string
-      pi_version:
+      adapter:
+        description: Registered official adapter id
+        required: false
+        default: pi-default
+        type: string
+      agent_version:
         description: Exact published Pi Coding Agent version
         required: true
+        type: string
+      harness_version:
+        description: Exact adapter package version when required
+        required: false
+        default: ""
+        type: string
+      provider:
+        description: Registered provider route
+        required: false
+        default: openai-codex
         type: string
     secrets:
       pi_auth_json:
@@ -42,7 +57,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 772c4b7f7eb810459d9fba0b7fa02d95f448a87d
+          ref: 0eb81b72b4986df72207bfef822137320c360053
           persist-credentials: false
 
       - name: Setup Node
@@ -51,28 +66,61 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Install pinned benchmark and runtime
-        env:
-          PI_VERSION: ${{ inputs.pi_version }}
+      - name: Install pinned benchmark prerequisites
         run: |
           set -euo pipefail
           npm ci
           sudo apt-get update
           sudo apt-get install --yes bubblewrap
-          runtime="$RUNNER_TEMP/pi-runtime"
-          npm install --prefix "$runtime" \
-            "@earendil-works/pi-coding-agent@$PI_VERSION"
-          echo "$runtime/node_modules/.bin" >> "$GITHUB_PATH"
-          echo "PI_RUNTIME=$runtime" >> "$GITHUB_ENV"
 
-      - name: Write private model credentials
+      - name: Resolve plan, install packages, and select credentials
         env:
+          ADAPTER: ${{ inputs.adapter }}
+          AGENT_VERSION: ${{ inputs.agent_version }}
+          HARNESS_VERSION: ${{ inputs.harness_version }}
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          THINKING: ${{ inputs.thinking }}
           PI_AUTH_JSON: ${{ secrets.pi_auth_json }}
         run: |
           set -euo pipefail
           umask 077
-          printf '%s' "$PI_AUTH_JSON" > "$RUNNER_TEMP/pi-auth.json"
-          python3 -m json.tool "$RUNNER_TEMP/pi-auth.json" >/dev/null
+          input="$RUNNER_TEMP/official-input.json"
+          plan="$RUNNER_TEMP/execution-plan.json"
+          raw_auth="$RUNNER_TEMP/pi-auth-source.json"
+          selected_auth="$RUNNER_TEMP/pi-auth.json"
+          runtime="$RUNNER_TEMP/pi-runtime"
+          node -e '
+            const input = {
+              adapter: process.env.ADAPTER,
+              agentVersion: process.env.AGENT_VERSION,
+              provider: process.env.PROVIDER,
+              model: process.env.MODEL,
+              reasoning: process.env.THINKING,
+            };
+            if (process.env.HARNESS_VERSION)
+              input.harnessVersion = process.env.HARNESS_VERSION;
+            const content = JSON.stringify(input);
+            require("node:fs").writeFileSync(process.argv[1], content);
+          ' "$input"
+          node scripts/official-registry-cli.mjs resolve "$input" "$plan"
+          mapfile -t packages < <(
+            node -e '
+              const plan = require(process.argv[1]);
+              for (const item of plan.packages)
+                console.log(`${item.name}@${item.version}`);
+            ' "$plan"
+          )
+          mkdir -p "$runtime"
+          npm install --prefix "$runtime" -- "${packages[@]}"
+          node scripts/official-registry-cli.mjs fingerprint \
+            "$runtime" "$plan" "$RUNNER_TEMP/installed-dependencies.json"
+          printf '%s' "$PI_AUTH_JSON" > "$raw_auth"
+          node scripts/official-registry-cli.mjs credential \
+            "$raw_auth" "$plan" "$selected_auth"
+          echo "$runtime/node_modules/.bin" >> "$GITHUB_PATH"
+          echo "PI_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "OFFICIAL_PLAN=$plan" >> "$GITHUB_ENV"
 
       - name: Run one registered task and export normalized evidence
         env:
@@ -83,14 +131,22 @@ jobs:
           set -euo pipefail
           config="$RUNNER_TEMP/benchmark-config.json"
           run_id="official-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          node scripts/prepare-benchmark.mjs \
-            --harness pi-default \
-            --model "$MODEL" \
-            --thinking "$THINKING" \
-            --command "$PI_RUNTIME/node_modules/.bin/pi" \
-            --auth-file "$RUNNER_TEMP/pi-auth.json" \
-            --runtime "$PI_RUNTIME" \
+          prepare=(
+            --harness "${{ inputs.adapter }}"
+            --model "$MODEL"
+            --thinking "$THINKING"
+            --command "$PI_RUNTIME/node_modules/.bin/pi"
+            --auth-file "$RUNNER_TEMP/pi-auth.json"
+            --runtime "$PI_RUNTIME"
             --output "$config"
+          )
+          if [[ "${{ inputs.adapter }}" == "pi-agent-ide" ]]; then
+            prepare+=(
+              --ide-package "$PI_RUNTIME/node_modules/pi-agent-ide"
+              --harness-version "${{ inputs.harness_version }}"
+            )
+          fi
+          node scripts/prepare-benchmark.mjs "${prepare[@]}"
           npm run benchmark -- check --config "$config"
           npm run benchmark -- run \
             --config "$config" \
@@ -151,7 +207,7 @@ jobs:
               invocation: "benchmark",
               callerSha: process.env.GITHUB_SHA,
               workflowRef: process.env.GITHUB_WORKFLOW_REF,
-              runnerSha: "772c4b7f7eb810459d9fba0b7fa02d95f448a87d",
+              runnerSha: "0eb81b72b4986df72207bfef822137320c360053",
               runnerOs: process.env.RUNNER_OS,
               runnerArch: process.env.RUNNER_ARCH,
               runnerImage: process.env.ImageOS ?? "unknown",
@@ -161,8 +217,13 @@ jobs:
             "results/$run_id/normalized" \
             "results/$run_id/official-manifest.json" \
             "$options"
+          cp "$OFFICIAL_PLAN" "results/$run_id/execution-plan.json"
+          cp "$RUNNER_TEMP/installed-dependencies.json" \
+            "results/$run_id/installed-dependencies.json"
           tar --create --gzip --file "$artifact" \
-            -C "results/$run_id" official-manifest.json normalized
+            -C "results/$run_id" \
+            official-manifest.json execution-plan.json \
+            installed-dependencies.json normalized
           sha256sum "$artifact" | tee "$RUNNER_TEMP/official-result.sha256"
           echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
 
@@ -193,4 +254,7 @@ jobs:
 
       - name: Remove credentials
         if: always()
-        run: rm --force "$RUNNER_TEMP/pi-auth.json"
+        run: |
+          rm --force \
+            "$RUNNER_TEMP/pi-auth.json" \
+            "$RUNNER_TEMP/pi-auth-source.json"
