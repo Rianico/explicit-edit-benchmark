@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -74,6 +74,11 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
       break;
     }
     case "omp": {
+      const bun = path.join(runtime, "node_modules", "@oven", "bun-linux-x64", "bin", "bun");
+      const bunLink = path.join(runtime, "node_modules", ".bin", "bun");
+      await symlink(bun, bunLink).catch((error) => {
+        if (error.code !== "EEXIST") throw error;
+      });
       const ompHome = path.join(directory, "omp");
       const imported = await privateJson(path.join(directory, "omp-import.json"), {
         type: "codex",
