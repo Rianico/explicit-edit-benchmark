@@ -69,6 +69,10 @@ export async function releaseOfficialWorkflow({ root = process.cwd(), templateDi
   )
     policy.workflows.push({ sha: runnerSha, runnerSha, status: "active" });
   await writeFile(policyFile, `${JSON.stringify(policy, null, 2)}\n`);
+  execFileSync("npx", ["--no-install", "oxfmt", POLICY], {
+    cwd: root,
+    stdio: "inherit",
+  });
   const policySha = commit(root, "Approve official workflow release", [POLICY]);
 
   const templateFile = path.join(templateDirectory, WORKFLOW);
