@@ -15,7 +15,8 @@ function exactKeys(value, keys, label) {
 
 /** Load and strictly validate a repository-owned official-run release policy. */
 export async function loadOfficialPolicy(file) {
-  const policy = JSON.parse(await readFile(path.resolve(file), "utf8"));
+  const source = typeof file === "string" ? path.resolve(file) : file;
+  const policy = JSON.parse(await readFile(source, "utf8"));
   exactKeys(
     policy,
     [
@@ -62,6 +63,8 @@ export async function loadOfficialPolicy(file) {
   );
   if (!SHA256.test(policy.runner.taskSetSha256) || !SHA256.test(policy.runner.verifierSha256))
     throw Error("policy.runner: invalid identity hash");
+  if (typeof policy.runner.contract !== "string" || !policy.runner.contract)
+    throw Error("policy.runner: invalid contract");
   if (!Array.isArray(policy.runner.tasks) || !policy.runner.tasks.length)
     throw Error("policy.runner.tasks: empty task registry");
   const ids = new Set();
@@ -76,8 +79,12 @@ export async function loadOfficialPolicy(file) {
       throw Error(`policy.runner.tasks[${index}]: invalid task identity`);
     ids.add(task.id);
   }
-  if (!Array.isArray(policy.normalizedSchemas) || !policy.normalizedSchemas.length)
-    throw Error("policy.normalizedSchemas: empty schema list");
+  if (
+    !Array.isArray(policy.normalizedSchemas) ||
+    !policy.normalizedSchemas.length ||
+    policy.normalizedSchemas.some((version) => !Number.isInteger(version))
+  )
+    throw Error("policy.normalizedSchemas: invalid schema list");
   exactKeys(
     policy.runPolicy,
     ["partialRuns", "oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"],
@@ -85,6 +92,9 @@ export async function loadOfficialPolicy(file) {
   );
   if (policy.runPolicy.partialRuns !== true)
     throw Error("policy.runPolicy: partial runs must be allowed");
+  for (const key of ["oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"])
+    if (!Number.isInteger(policy.runPolicy[key]) || policy.runPolicy[key] < 0)
+      throw Error(`policy.runPolicy: invalid ${key}`);
   return policy;
 }
 
