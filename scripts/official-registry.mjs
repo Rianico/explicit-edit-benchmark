@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { canonicalIdentityJson } from "./official-identities.mjs";
 
 const EXACT_VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
@@ -131,6 +133,46 @@ export async function resolveOfficialPlan(input, options = {}) {
       fields: adapter.credentialSchemas[input.provider].allowed,
     },
     planHash: createHash("sha256").update(canonicalIdentityJson(identity)).digest("hex"),
+  };
+}
+
+/** Verify installed root packages and fingerprint the complete npm lock resolution. */
+export async function installedDependencyFingerprint(runtimeDirectory, plan) {
+  const lock = JSON.parse(
+    await readFile(path.join(path.resolve(runtimeDirectory), "package-lock.json"), "utf8"),
+  );
+  if (lock.lockfileVersion !== 3 || !lock.packages || typeof lock.packages !== "object")
+    throw Error("installed dependency tree requires package-lock v3");
+  for (const expected of plan.packages) {
+    const installed = lock.packages[`node_modules/${expected.name}`];
+    if (installed?.version !== expected.version || installed?.integrity !== expected.integrity)
+      throw Error(`installed package does not match plan: ${expected.name}@${expected.version}`);
+  }
+  const packages = Object.entries(lock.packages)
+    .filter(([location]) => location)
+    .map(([location, installed]) => {
+      if (installed.link === true)
+        throw Error(`installed dependency may not be a link: ${location}`);
+      const resolved = installed.resolved ?? null;
+      if (
+        resolved !== null &&
+        (!URL.canParse(resolved) || new URL(resolved).hostname !== "registry.npmjs.org")
+      )
+        throw Error(`installed dependency has forbidden origin: ${location}`);
+      if (typeof installed.version !== "string" || !EXACT_VERSION.test(installed.version))
+        throw Error(`installed dependency has invalid version: ${location}`);
+      return {
+        location,
+        version: installed.version,
+        resolved,
+        integrity: installed.integrity ?? null,
+      };
+    })
+    .sort((left, right) => left.location.localeCompare(right.location));
+  return {
+    packageCount: packages.length,
+    fingerprint: createHash("sha256").update(canonicalIdentityJson(packages)).digest("hex"),
+    packages,
   };
 }
 

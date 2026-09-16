@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { resolveOfficialPlan, selectOfficialCredential } from "../../scripts/official-registry.mjs";
+import {
+  installedDependencyFingerprint,
+  resolveOfficialPlan,
+  selectOfficialCredential,
+} from "../../scripts/official-registry.mjs";
 
 const input = {
   adapter: "pi-default",
@@ -116,6 +123,38 @@ test("official resolver rejects substituted package bytes and origins", async ()
     }),
     /forbidden tarball origin/,
   );
+});
+
+test("installed dependency fingerprint covers exact resolved tree and rejects substitution", async () => {
+  const plan = await resolveOfficialPlan(input, { fetch: registry() });
+  const runtime = await mkdtemp(path.join(tmpdir(), "official-runtime-"));
+  const lock = {
+    lockfileVersion: 3,
+    packages: {
+      "": { dependencies: {} },
+      "node_modules/@earendil-works/pi-coding-agent": {
+        version: "0.85.1",
+        resolved:
+          "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-0.85.1.tgz",
+        integrity: "sha512-abcdef",
+      },
+      "node_modules/runtime-child": {
+        version: "1.2.3",
+        resolved: "https://registry.npmjs.org/runtime-child/-/runtime-child-1.2.3.tgz",
+        integrity: "sha512-child",
+      },
+    },
+  };
+  await writeFile(path.join(runtime, "package-lock.json"), JSON.stringify(lock));
+  const first = await installedDependencyFingerprint(runtime, plan);
+  assert.equal(first.packageCount, 2);
+  lock.packages["node_modules/runtime-child"].version = "1.2.4";
+  await writeFile(path.join(runtime, "package-lock.json"), JSON.stringify(lock));
+  const changed = await installedDependencyFingerprint(runtime, plan);
+  assert.notEqual(changed.fingerprint, first.fingerprint);
+  lock.packages["node_modules/@earendil-works/pi-coding-agent"].version = "0.85.2";
+  await writeFile(path.join(runtime, "package-lock.json"), JSON.stringify(lock));
+  await assert.rejects(installedDependencyFingerprint(runtime, plan), /does not match plan/);
 });
 
 test("credential loader selects one provider and rejects embedded configuration", async () => {
