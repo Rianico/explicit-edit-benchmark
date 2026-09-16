@@ -45,7 +45,35 @@ permissions:
   contents: read
 
 jobs:
+  resolve:
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-22.04
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+    steps:
+      - name: Resolve called workflow revision
+        id: revision
+        run: |
+          set -euo pipefail
+          response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=explicit-edit-official-run")
+          token=$(jq --raw-output .value <<<"$response")
+          workflow_ref=$(TOKEN="$token" node -e '
+            const payload = process.env.TOKEN.split(".")[1];
+            const claims = JSON.parse(Buffer.from(payload, "base64url"));
+            process.stdout.write(claims.job_workflow_ref ?? "");
+          ')
+          prefix="alexshpunt/explicit-edit-benchmark/.github/workflows/official-run.yml@"
+          sha="${workflow_ref#"$prefix"}"
+          test "$workflow_ref" = "$prefix$sha"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   produce:
+    needs: resolve
     permissions:
       contents: read
     runs-on: ubuntu-22.04
@@ -59,7 +87,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 8c44d544eb7620871b115a64690888137adeff19
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
@@ -135,6 +163,7 @@ jobs:
           MODEL: ${{ inputs.model }}
           THINKING: ${{ inputs.thinking }}
           TASK: ${{ inputs.task }}
+          RUNNER_SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           set -euo pipefail
           config="$RUNNER_TEMP/benchmark-config.json"
@@ -207,7 +236,7 @@ jobs:
               invocation: "benchmark",
               callerSha: process.env.GITHUB_SHA,
               workflowRef: process.env.GITHUB_WORKFLOW_REF,
-              runnerSha: "8c44d544eb7620871b115a64690888137adeff19",
+              runnerSha: process.env.RUNNER_SHA,
               runnerOs: process.env.RUNNER_OS,
               runnerArch: process.env.RUNNER_ARCH,
               runnerImage: process.env.ImageOS ?? "unknown",
@@ -251,7 +280,7 @@ jobs:
           rm --recursive --force "$RUNNER_TEMP/execution-private"
 
   attest:
-    needs: produce
+    needs: [resolve, produce]
     permissions:
       actions: read
       artifact-metadata: write
@@ -265,7 +294,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: 9b523f4c3fca21dc091efbbb919d86a9294fa71d
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
@@ -303,11 +332,16 @@ jobs:
           } from "./scripts/official-verifier.mjs";
           await extractOfficialArchive(process.env.ARCHIVE, process.env.OUTPUT);
           NODE
-          node scripts/official-result.mjs validate-runner \
-            "$RUNNER_TEMP/official-extracted/official-manifest.json" \
-            "$RUNNER_TEMP/official-extracted/normalized" \
-            policies/official-runs/v1.json \
-            8c44d544eb7620871b115a64690888137adeff19
+          node scripts/validate-normalized-run.mjs \
+            "$RUNNER_TEMP/official-extracted/normalized"
+          MANIFEST="$RUNNER_TEMP/official-extracted/official-manifest.json" \
+            RUNNER_SHA="${{ needs.resolve.outputs.sha }}" node -e '
+              const manifest = require(process.env.MANIFEST);
+              if (manifest.runnerSha !== process.env.RUNNER_SHA)
+                throw Error(
+                  "Producer runner SHA does not match called workflow",
+                );
+            '
           echo "ARTIFACT=$artifact" >> "$GITHUB_ENV"
 
       - name: Attest exact verified result archive
