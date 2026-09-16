@@ -2,47 +2,39 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { canonicalIdentityJson } from "./official-identities.mjs";
+import { adapterDefinition } from "./adapter-registry.mjs";
 
 const EXACT_VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const MODEL = /^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const OFFICIAL_REGISTRY_URL = "https://registry.npmjs.org";
 
-/** Reviewed adapters available to official callers. Local benchmark configs remain unrestricted. */
-export const OFFICIAL_ADAPTERS = Object.freeze({
-  "pi-default": {
-    agentFamily: "pi",
-    harnessFamily: "pi-default",
-    binary: "pi",
+const OAUTH_SCHEMA = {
+  required: ["type", "access", "refresh", "expires", "accountId"],
+  allowed: ["type", "access", "refresh", "expires", "accountId"],
+  type: "oauth",
+};
+
+/** Resolve package evidence for the canonical adapter selected by either transport. */
+function adapterRecipe(id) {
+  let adapter;
+  try {
+    adapter = adapterDefinition(id);
+  } catch {
+    return null;
+  }
+  return {
+    ...adapter,
+    harnessFamily: id,
     packages: [
-      { role: "agent", name: "@earendil-works/pi-coding-agent", versionInput: "agentVersion" },
+      { role: "agent", name: adapter.package, versionInput: "agentVersion" },
+      ...(adapter.extensionPackage
+        ? [{ role: "extension", name: adapter.extensionPackage, versionInput: "harnessVersion" }]
+        : []),
     ],
     providers: ["openai-codex"],
-    credentialSchemas: {
-      "openai-codex": {
-        required: ["type", "access", "refresh", "expires", "accountId"],
-        allowed: ["type", "access", "refresh", "expires", "accountId"],
-        type: "oauth",
-      },
-    },
-  },
-  "pi-agent-ide": {
-    agentFamily: "pi",
-    harnessFamily: "pi-agent-ide",
-    binary: "pi",
-    packages: [
-      { role: "agent", name: "@earendil-works/pi-coding-agent", versionInput: "agentVersion" },
-      { role: "extension", name: "pi-agent-ide", versionInput: "harnessVersion" },
-    ],
-    providers: ["openai-codex"],
-    credentialSchemas: {
-      "openai-codex": {
-        required: ["type", "access", "refresh", "expires", "accountId"],
-        allowed: ["type", "access", "refresh", "expires", "accountId"],
-        type: "oauth",
-      },
-    },
-  },
-});
+    credentialSchemas: { "openai-codex": OAUTH_SCHEMA },
+  };
+}
 
 function exactKeys(value, keys, label) {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -60,10 +52,10 @@ function exactVersion(value, label) {
 }
 
 function validateInput(input) {
-  const adapter = OFFICIAL_ADAPTERS[input?.adapter];
-  if (!adapter) throw Error(`Unknown official adapter: ${input?.adapter}`);
+  const adapter = adapterRecipe(input?.adapter);
+  if (!adapter) throw Error(`Unknown adapter: ${input?.adapter}`);
   const fields = ["adapter", "agentVersion", "provider", "model", "reasoning"];
-  if (input.adapter === "pi-agent-ide") fields.push("harnessVersion");
+  if (adapter.extensionPackage) fields.push("harnessVersion");
   exactKeys(input, fields, "official input");
   exactVersion(input.agentVersion, "agentVersion");
   if (input.harnessVersion !== undefined) exactVersion(input.harnessVersion, "harnessVersion");
@@ -108,7 +100,7 @@ async function npmPackage(name, version, fetchImpl) {
 }
 
 /** Resolve caller data to an immutable, declarative execution plan before inference starts. */
-export async function resolveOfficialPlan(input, options = {}) {
+export async function resolveExecutionPlan(input, options = {}) {
   const adapter = validateInput(input);
   const fetchImpl = options.fetch ?? fetch;
   const packages = [];
@@ -180,7 +172,7 @@ export async function installedDependencyFingerprint(runtimeDirectory, plan) {
 export function selectOfficialCredential(store, plan) {
   if (!store || typeof store !== "object" || Array.isArray(store))
     throw Error("credential store: expected object");
-  const schema = OFFICIAL_ADAPTERS[plan.adapter]?.credentialSchemas[plan.provider];
+  const schema = adapterRecipe(plan.adapter)?.credentialSchemas[plan.provider];
   if (!schema) throw Error("credential schema does not match execution plan");
   const credential = store[plan.provider];
   exactKeys(credential, schema.allowed, `${plan.provider} credential`);

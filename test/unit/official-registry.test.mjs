@@ -5,9 +5,9 @@ import path from "node:path";
 import test from "node:test";
 import {
   installedDependencyFingerprint,
-  resolveOfficialPlan,
+  resolveExecutionPlan,
   selectOfficialCredential,
-} from "../../scripts/official-registry.mjs";
+} from "../../scripts/execution-plan.mjs";
 
 const input = {
   adapter: "pi-default",
@@ -36,7 +36,7 @@ function registry(metadata = {}) {
 }
 
 test("official resolver emits an exact declarative Pi plan", async () => {
-  const plan = await resolveOfficialPlan(input, { fetch: registry() });
+  const plan = await resolveExecutionPlan(input, { fetch: registry() });
   assert.equal(plan.planHash.length, 64);
   assert.deepEqual(
     plan.packages.map(({ name, version, role }) => ({ name, version, role })),
@@ -47,7 +47,7 @@ test("official resolver emits an exact declarative Pi plan", async () => {
   assert.equal(Object.hasOwn(plan, "credentials"), false);
 });
 test("Pi Agent IDE resolves agent and extension as separate exact packages", async () => {
-  const plan = await resolveOfficialPlan(
+  const plan = await resolveExecutionPlan(
     { ...input, adapter: "pi-agent-ide", harnessVersion: "1.2.3" },
     {
       fetch: async (url) => {
@@ -84,25 +84,25 @@ test("official resolver rejects executable and mutable caller inputs before pack
     { runtimeMount: "/" },
   ]) {
     await assert.rejects(
-      resolveOfficialPlan({ ...input, ...extra }, { fetch: registry() }),
+      resolveExecutionPlan({ ...input, ...extra }, { fetch: registry() }),
       /expected fields/,
     );
   }
   for (const version of ["latest", "^0.85.1", "file:../pi", "git+https://example.invalid/pi"])
     await assert.rejects(
-      resolveOfficialPlan({ ...input, agentVersion: version }, { fetch: registry() }),
+      resolveExecutionPlan({ ...input, agentVersion: version }, { fetch: registry() }),
       /exact semantic version/,
     );
   await assert.rejects(
-    resolveOfficialPlan({ ...input, adapter: "unknown" }, { fetch: registry() }),
-    /Unknown official adapter/,
+    resolveExecutionPlan({ ...input, adapter: "unknown" }, { fetch: registry() }),
+    /Unknown adapter/,
   );
   await assert.rejects(
-    resolveOfficialPlan({ ...input, model: "other/gpt" }, { fetch: registry() }),
+    resolveExecutionPlan({ ...input, model: "other/gpt" }, { fetch: registry() }),
     /provider-qualified/,
   );
   await assert.rejects(
-    resolveOfficialPlan(
+    resolveExecutionPlan(
       { ...input, model: "openai-codex/luna; touch owned" },
       { fetch: registry() },
     ),
@@ -112,11 +112,11 @@ test("official resolver rejects executable and mutable caller inputs before pack
 
 test("official resolver rejects substituted package bytes and origins", async () => {
   await assert.rejects(
-    resolveOfficialPlan(input, { fetch: registry({ version: "0.85.2" }) }),
+    resolveExecutionPlan(input, { fetch: registry({ version: "0.85.2" }) }),
     /identity mismatch/,
   );
   await assert.rejects(
-    resolveOfficialPlan(input, {
+    resolveExecutionPlan(input, {
       fetch: registry({
         dist: { integrity: "sha512-abcdef", tarball: "https://attacker.invalid/package.tgz" },
       }),
@@ -126,7 +126,7 @@ test("official resolver rejects substituted package bytes and origins", async ()
 });
 
 test("installed dependency fingerprint covers exact resolved tree and rejects substitution", async () => {
-  const plan = await resolveOfficialPlan(input, { fetch: registry() });
+  const plan = await resolveExecutionPlan(input, { fetch: registry() });
   const runtime = await mkdtemp(path.join(tmpdir(), "official-runtime-"));
   const lock = {
     lockfileVersion: 3,
@@ -158,7 +158,7 @@ test("installed dependency fingerprint covers exact resolved tree and rejects su
 });
 
 test("credential loader selects one provider and rejects embedded configuration", async () => {
-  const plan = await resolveOfficialPlan(input, { fetch: registry() });
+  const plan = await resolveExecutionPlan(input, { fetch: registry() });
   const credential = {
     type: "oauth",
     access: "secret-access",

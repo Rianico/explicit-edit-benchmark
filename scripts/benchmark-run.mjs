@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { adapterDefinition } from "./adapter-registry.mjs";
 
 const TEMPLATE = "alexshpunt/explicit-edit-benchmark-run-template";
 const WORKFLOW = "official-run.yml";
@@ -56,7 +57,7 @@ export function parseRunOptions(args) {
       "ide-package": { type: "string" },
       runtime: { type: "string", multiple: true },
       "caller-repository": { type: "string" },
-      "agent-version": { type: "string", default: "0.85.1" },
+      "agent-version": { type: "string" },
       "harness-version": { type: "string", default: "" },
       "pi-auth-file": { type: "string" },
       "no-wait": { type: "boolean", default: false },
@@ -65,8 +66,11 @@ export function parseRunOptions(args) {
   if (values.official === values.local)
     throw Error("Choose exactly one run mode: --official or --local");
   if (!values.harness || !values.model) throw Error("Run requires --harness and --model");
-  if (values.official && !["pi-default", "pi-agent-ide"].includes(values.harness))
-    throw Error(`Official adapter is not registered: ${values.harness}`);
+  adapterDefinition(values.harness);
+  if (values.official && !values["agent-version"])
+    throw Error("Official run requires the exact installed --agent-version");
+  if (values.official && values.harness === "pi-agent-ide" && !values["harness-version"])
+    throw Error("Pi Agent IDE requires the exact installed --harness-version");
   const localOnly = [
     "timeout-seconds",
     "profile-name",

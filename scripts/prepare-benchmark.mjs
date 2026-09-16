@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { ADAPTERS, ADAPTER_BINARIES, ADAPTER_IDS } from "./adapter-registry.mjs";
+export { ADAPTERS, ADAPTER_BINARIES, ADAPTER_IDS } from "./adapter-registry.mjs";
 
 /** Default output of a prepared adapter, in the system temp folder, so it never lands in the checkout. */
 export const defaultConfigPath = path.join(os.tmpdir(), "explicit-edit-benchmark-config.json");
@@ -226,34 +228,8 @@ function ompSettings(provider, model, thinking, env) {
       ) + "\n",
   };
 }
-/** Adapter id, which is also the published family, to the agent family it runs. */
-const ADAPTER_AGENT = {
-  "pi-default": "pi",
-  "pi-agent-ide": "pi",
-  "codex-cli-default": "codex-cli",
-  "opencode-default": "opencode",
-  "oh-my-pi-default": "oh-my-pi",
-  "github-copilot-cli-default": "github-copilot-cli",
-  "dsh-standard": "deepseek-harness",
-  "dsh-code": "deepseek-harness",
-};
-/** Every adapter this benchmark can run, in the order the docs list them. */
-export const ADAPTER_IDS = Object.keys(ADAPTER_AGENT);
-
-/** The CLI each adapter runs when --command is not given. Two adapters may share one binary. */
-export const ADAPTER_BINARIES = {
-  "pi-default": "pi",
-  "pi-agent-ide": "pi",
-  "codex-cli-default": "codex",
-  "opencode-default": "opencode",
-  "oh-my-pi-default": "omp",
-  "github-copilot-cli-default": "copilot",
-  "dsh-standard": "dsh",
-  "dsh-code": "dsh",
-};
-
 function canonicalIdentity({ harness, model, thinking, version, provider, harnessVersion }) {
-  const agentFamily = ADAPTER_AGENT[harness];
+  const agentFamily = ADAPTERS[harness]?.agentFamily;
   if (!agentFamily)
     throw Error(`Unsupported adapter: ${harness}. Use one of: ${ADAPTER_IDS.join(", ")}`);
   if (harness === "pi-agent-ide" && !harnessVersion)
