@@ -34,7 +34,7 @@ function requireClean(root) {
   if (dirty) throw Error(`Release checkout must be clean:\n${dirty}`);
 }
 
-export function pinCallerTemplate(text, workflowSha) {
+export function pinCallerTemplate(text, workflowSha, policySha) {
   let count = 0;
   const updated = text.replace(
     /(official-run\.yml@|signer_sha:\s*)[0-9a-f]{40}/gu,
@@ -43,8 +43,14 @@ export function pinCallerTemplate(text, workflowSha) {
       return `${prefix}${workflowSha}`;
     },
   );
-  if (count !== 2) throw Error(`Unexpected caller template pin layout: ${count}`);
-  return updated;
+  if (count !== 2) throw Error(`Unexpected caller workflow pin layout: ${count}`);
+  let submitCount = 0;
+  const complete = updated.replace(/(official-submit\.yml@)[0-9a-f]{40}/gu, (match, prefix) => {
+    submitCount += 1;
+    return `${prefix}${policySha}`;
+  });
+  if (submitCount !== 1) throw Error(`Unexpected caller submit pin layout: ${submitCount}`);
+  return complete;
 }
 
 /**
@@ -76,7 +82,10 @@ export async function releaseOfficialWorkflow({ root = process.cwd(), templateDi
   const policySha = commit(root, "Approve official workflow release", [POLICY]);
 
   const templateFile = path.join(templateDirectory, WORKFLOW);
-  await writeFile(templateFile, pinCallerTemplate(await readFile(templateFile, "utf8"), runnerSha));
+  await writeFile(
+    templateFile,
+    pinCallerTemplate(await readFile(templateFile, "utf8"), runnerSha, policySha),
+  );
   const templateSha = commit(templateDirectory, "Pin official benchmark workflow release", [
     WORKFLOW,
   ]);
