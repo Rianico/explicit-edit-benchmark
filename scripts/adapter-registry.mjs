@@ -33,6 +33,7 @@ export const ADAPTERS = Object.freeze({
     binary: "omp",
     package: "@oh-my-pi/pi-coding-agent",
     credential: "omp",
+    runtimePackage: "bun",
   },
   "github-copilot-cli-default": {
     agentFamily: "github-copilot-cli",

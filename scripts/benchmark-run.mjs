@@ -59,6 +59,7 @@ export function parseRunOptions(args) {
       "caller-repository": { type: "string" },
       "agent-version": { type: "string" },
       "harness-version": { type: "string", default: "" },
+      "runtime-version": { type: "string", default: "" },
       "pi-auth-file": { type: "string" },
       "no-wait": { type: "boolean", default: false },
     },
@@ -71,6 +72,8 @@ export function parseRunOptions(args) {
     throw Error("Official run requires the exact installed --agent-version");
   if (values.official && values.harness === "pi-agent-ide" && !values["harness-version"])
     throw Error("Pi Agent IDE requires the exact installed --harness-version");
+  if (values.official && values.harness === "oh-my-pi-default" && !values["runtime-version"])
+    throw Error("Oh My Pi requires the exact installed --runtime-version");
   const localOnly = [
     "timeout-seconds",
     "profile-name",
@@ -201,6 +204,8 @@ export async function runOfficial(values, execute = command) {
     `agent_version=${values["agent-version"]}`,
     "-f",
     `harness_version=${values["harness-version"]}`,
+    "-f",
+    `runtime_version=${values["runtime-version"]}`,
   ]);
 
   let runId;
