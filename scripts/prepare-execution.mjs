@@ -88,7 +88,11 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
         expired: new Date(credential.expires).toISOString(),
       });
       execFileSync(command, ["auth-broker", "import", imported], {
-        env: { ...process.env, PI_CODING_AGENT_DIR: ompHome },
+        env: {
+          ...process.env,
+          PATH: `${path.join(runtime, "node_modules", ".bin")}:${process.env.PATH ?? ""}`,
+          PI_CODING_AGENT_DIR: ompHome,
+        },
         stdio: ["ignore", "ignore", "inherit"],
       });
       await rm(imported, { force: true });
