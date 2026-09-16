@@ -40,7 +40,17 @@ const timeline = [
     type: "thread/tokenUsage/updated",
     data: {
       tokenUsage: {
+        total: { totalTokens: 104, inputTokens: 80, cachedInputTokens: 20, outputTokens: 4 },
+        last: { totalTokens: 104, inputTokens: 80, cachedInputTokens: 20, outputTokens: 4 },
+      },
+    },
+  },
+  {
+    type: "thread/tokenUsage/updated",
+    data: {
+      tokenUsage: {
         total: { totalTokens: 20362, inputTokens: 390, cachedInputTokens: 19968, outputTokens: 4 },
+        last: { totalTokens: 20258, inputTokens: 310, cachedInputTokens: 19948, outputTokens: 0 },
       },
     },
   },
@@ -49,7 +59,7 @@ const timeline = [
 
 await test("a bb timeline turns into rounds, calls, and observed tokens", () => {
   const metrics = metricsFromTimeline(timeline);
-  assert.equal(metrics.modelRounds, 1);
+  assert.equal(metrics.modelRounds, 2);
   assert.equal(metrics.toolCalls, 3);
   assert.deepEqual(
     metrics.calls.map((call) => call.item.type),
@@ -57,7 +67,7 @@ await test("a bb timeline turns into rounds, calls, and observed tokens", () => 
   );
   assert.deepEqual(metrics.errors, []);
   assert.equal(metrics.eventCount, timeline.length);
-  assert.equal(metrics.modelRounds, 1);
+  assert.equal(metrics.modelRounds, 2);
   assert.equal(metrics.inputTokens, 390);
   assert.equal(metrics.outputTokens, 4);
   assert.equal(metrics.cacheReadTokens, 19968);
@@ -68,6 +78,25 @@ await test("a bb timeline turns into rounds, calls, and observed tokens", () => 
     metrics.totalTokens,
   );
   assert.equal(metrics.totalTokens, 20362);
+});
+
+await test("incomplete per-response usage stays null", () => {
+  const metrics = metricsFromTimeline([
+    { type: "thread/contextWindowUsage/updated", data: {} },
+    { type: "thread/contextWindowUsage/updated", data: {} },
+    {
+      type: "thread/tokenUsage/updated",
+      data: {
+        tokenUsage: {
+          total: { totalTokens: 104, inputTokens: 80, cachedInputTokens: 20, outputTokens: 4 },
+          last: { totalTokens: 104, inputTokens: 80, cachedInputTokens: 20, outputTokens: 4 },
+        },
+      },
+    },
+  ]);
+  assert.equal(metrics.modelRounds, 2);
+  assert.equal(metrics.totalTokens, null);
+  assert.equal(metrics.inputTokens, null);
 });
 
 await test("facts bb does not report stay null instead of zero", () => {
