@@ -45,11 +45,14 @@ export function pinCallerTemplate(text, workflowSha, policySha) {
   );
   if (count !== 2) throw Error(`Unexpected caller workflow pin layout: ${count}`);
   let submitCount = 0;
-  const complete = updated.replace(/(official-submit\.yml@)[0-9a-f]{40}/gu, (match, prefix) => {
-    submitCount += 1;
-    return `${prefix}${policySha}`;
-  });
-  if (submitCount !== 1) throw Error(`Unexpected caller submit pin layout: ${submitCount}`);
+  const complete = updated.replace(
+    /(official-submit\.yml@|policy_sha:\s*)[0-9a-f]{40}/gu,
+    (match, prefix) => {
+      submitCount += 1;
+      return `${prefix}${policySha}`;
+    },
+  );
+  if (submitCount !== 2) throw Error(`Unexpected caller submit pin layout: ${submitCount}`);
   return complete;
 }
 
