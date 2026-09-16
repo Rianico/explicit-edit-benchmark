@@ -244,6 +244,7 @@ export async function ingestSubmission(storeDirectory, account, rawSubmission) {
       clientRunId: submission.clientRunId,
       runId: manifest.runId,
       purpose: submission.purpose,
+      verification: account.verification ?? "unverified",
       definitions: submission.definitions,
     };
     await writeFile(
