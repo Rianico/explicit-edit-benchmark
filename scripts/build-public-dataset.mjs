@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { createAggregateState, materializeAggregateState } from "./aggregate-state.mjs";
+import { componentSources } from "./component-sources.mjs";
 import { validateNormalizedRun } from "./validate-normalized-run.mjs";
 import { applyExclusions, exclusionPolicyRevision, loadExclusionRegistry } from "./exclusions.mjs";
 import {
@@ -508,6 +509,7 @@ export async function buildDerivedDatasetFromAggregateState(
   );
   const views = {
     schemaVersion: 1,
+    sources: componentSources(),
     scoring,
     exclusions,
     leaderboard: leaderboardRows,
@@ -750,6 +752,7 @@ export async function buildPublicDatasetFromStore(
   );
   const views = {
     schemaVersion: 1,
+    sources: componentSources(),
     scoring: leaderboard.scoring,
     exclusions,
     leaderboard: leaderboardRows,

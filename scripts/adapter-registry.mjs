@@ -8,6 +8,7 @@ export const ADAPTERS = Object.freeze({
     binary: "pi",
     package: "@earendil-works/pi-coding-agent",
     credential: "pi",
+    repositoryUrl: "https://github.com/earendil-works/pi",
   },
   "pi-agent-ide": {
     agentFamily: "pi",
@@ -15,18 +16,21 @@ export const ADAPTERS = Object.freeze({
     package: "@earendil-works/pi-coding-agent",
     extensionPackage: "pi-agent-ide",
     credential: "pi",
+    repositoryUrl: "https://github.com/alexshpunt/pi-agent-ide",
   },
   "codex-cli-default": {
     agentFamily: "codex-cli",
     binary: "codex",
     package: "@openai/codex",
     credential: "codex",
+    repositoryUrl: "https://github.com/openai/codex",
   },
   "opencode-default": {
     agentFamily: "opencode",
     binary: "opencode",
     package: "opencode-ai",
     credential: "opencode",
+    repositoryUrl: "https://github.com/anomalyco/opencode",
   },
   "oh-my-pi-default": {
     agentFamily: "oh-my-pi",
@@ -34,24 +38,28 @@ export const ADAPTERS = Object.freeze({
     package: "@oh-my-pi/pi-coding-agent",
     credential: "omp",
     runtimePackage: "@oven/bun-linux-x64",
+    repositoryUrl: "https://github.com/can1357/oh-my-pi",
   },
   "github-copilot-cli-default": {
     agentFamily: "github-copilot-cli",
     binary: "copilot",
     package: "@github/copilot",
     credential: "copilot",
+    repositoryUrl: "https://github.com/github/copilot-cli",
   },
   "dsh-standard": {
     agentFamily: "deepseek-harness",
     binary: "dsh",
     package: "@deepseek-ai/dsh",
     credential: "dsh",
+    repositoryUrl: "https://github.com/deepseek-ai/deepseek-harness",
   },
   "dsh-code": {
     agentFamily: "deepseek-harness",
     binary: "dsh",
     package: "@deepseek-ai/dsh",
     credential: "dsh",
+    repositoryUrl: "https://github.com/deepseek-ai/deepseek-harness",
   },
 });
 
