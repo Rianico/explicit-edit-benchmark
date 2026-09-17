@@ -1010,5 +1010,12 @@
     "retryFailures": 0,
     "concurrency": 1,
     "timeoutMs": 180000
+  },
+  "fullRunPolicy": {
+    "partialRuns": true,
+    "oracleRecoveries": 5,
+    "retryFailures": 0,
+    "concurrency": 10,
+    "timeoutMs": 120000
   }
 }

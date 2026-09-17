@@ -28,6 +28,7 @@ export async function loadOfficialPolicy(file) {
       "benchmark",
       "normalizedSchemas",
       "runPolicy",
+      "fullRunPolicy",
     ],
     "policy",
   );
@@ -85,17 +86,26 @@ export async function loadOfficialPolicy(file) {
     policy.normalizedSchemas.some((version) => !Number.isInteger(version))
   )
     throw Error("policy.normalizedSchemas: invalid schema list");
-  exactKeys(
-    policy.runPolicy,
-    ["partialRuns", "oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"],
-    "policy.runPolicy",
-  );
-  if (policy.runPolicy.partialRuns !== true)
-    throw Error("policy.runPolicy: partial runs must be allowed");
-  for (const key of ["oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"])
-    if (!Number.isInteger(policy.runPolicy[key]) || policy.runPolicy[key] < 0)
-      throw Error(`policy.runPolicy: invalid ${key}`);
+  for (const [name, runPolicy] of [
+    ["runPolicy", policy.runPolicy],
+    ["fullRunPolicy", policy.fullRunPolicy],
+  ]) {
+    exactKeys(
+      runPolicy,
+      ["partialRuns", "oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"],
+      `policy.${name}`,
+    );
+    if (runPolicy.partialRuns !== true) throw Error(`policy.${name}: partial runs must be allowed`);
+    for (const key of ["oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"])
+      if (!Number.isInteger(runPolicy[key]) || runPolicy[key] < 0)
+        throw Error(`policy.${name}: invalid ${key}`);
+  }
   return policy;
+}
+
+/** Select the exact run policy for the measured scope. */
+export function runPolicyForLifecycle(policy, lifecycleState) {
+  return lifecycleState === "full-measurement" ? policy.fullRunPolicy : policy.runPolicy;
 }
 
 /** Resolve an active workflow to its immutable runner revision. */
