@@ -18,11 +18,11 @@ The public score keeps first-attempt success more important without discarding u
 
 `quality = 0.75 × first exact + 0.25 × final exact`
 
-Repeated observations first form one mean for each exact `configurationHash × task` cell. Repeating the same configuration refines that cell and increases its observation count; it does not give the configuration more weight. Compatible configurations then receive equal weight within each task, and tasks receive equal weight in the final quality score.
+Repeated observations first form one mean for each user-visible configuration and task. Full and partial runs with the same model, agent, harness version, provider, transport, and reasoning level refine that cell and increase its observation count. Historical configuration hashes remain provenance and do not split the score. Compatible configurations then receive equal weight within each task, and tasks receive equal weight in the final quality score.
 
 Coverage is the share of the declared task set observed at least once. Partial runs are valid and remain visible. The conservative leaderboard score is `quality × coverage`, while quality and coverage are also published separately. This prevents a perfect one-task run from looking like a complete benchmark.
 
-Owner, display labels, run IDs, and timestamps do not create new experimental cells. Runs with different task sets, verifier contracts, or run policies are not mixed. Raw observations remain in the Dataset when scoring rules change.
+Owner, display labels, run IDs, timestamps, partial task selections, and scheduling concurrency do not create new experimental cells. Different benchmark contracts or verifier identities remain separate. Task-set and run-policy identities stay attached as provenance. Raw observations remain in the Dataset when scoring rules change.
 
 ## Recovery
 
