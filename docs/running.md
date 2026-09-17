@@ -217,6 +217,13 @@ sandbox, and thread for every trial. A clean Pi route may use `BB_AGENT_MODELS` 
 when Node is installed outside `/usr`, and use `BB_TRANSPORT` to publish the exact provider wire
 route.
 
+The timeline parser sums `tokenUsage.last` for every model response. It intentionally does not sum
+`tokenUsage.total`, because that value is cumulative across the bb thread and would count earlier
+recovery rounds again. Use a bb Pi provider that emits one token-usage update per assistant
+response; bb 0.43.1 emits only the final response of a turn and therefore under-reports multi-tool
+turns. When the timeline exposes more response context updates than usage updates, the adapter
+leaves token metrics unavailable instead of publishing the incomplete count.
+
 ## Development commands
 
 The lower-level commands are still there for adapter work and maintainer debugging:
