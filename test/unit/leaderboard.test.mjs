@@ -447,29 +447,41 @@ await test("leaderboard data: a partial run cannot look complete", () => {
   assertCloseTo(rows[0].coverage, 1 / 226);
 });
 
-await test("leaderboard data: runs judged by different rules never merge", () => {
-  const first = {
+await test("leaderboard data: partial and full runs contribute to one user configuration", () => {
+  const partial = {
     ...index.runs[0],
-    taskSetSha256: "set-a",
+    taskSetSha256: "partial-set",
     verifierSha256: "verifier-a",
-    policy: { oracleRecoveries: 5, retryFailures: 0, timeoutMs: 120000, concurrency: 1 },
+    definitions: {
+      ...index.runs[0].definitions,
+      taskSet: { taskIds: [trials[0].taskId] },
+    },
+    policy: { oracleRecoveries: 0, retryFailures: 0, timeoutMs: 180000, concurrency: 1 },
   };
-  const second = {
-    ...first,
+  const full = {
+    ...partial,
     runId: "run-b",
     submissionId: "submission-b",
-    policy: { ...first.policy, timeoutMs: 900000 },
+    taskSetSha256: "canonical-set",
+    definitions: {
+      ...partial.definitions,
+      taskSet: { taskIds: Array.from({ length: 226 }, (_, task) => `task-${task}`) },
+    },
+    policy: { oracleRecoveries: 5, retryFailures: 0, timeoutMs: 120000, concurrency: 10 },
   };
   const rows = aggregateLeaderboard(
-    { runs: [first, second] },
+    { runs: [partial, full] },
     [profiles[0], { ...profiles[0], runId: "run-b" }],
     [trials[0], { ...trials[0], runId: "run-b" }],
     [],
   );
-  // Same benchmark, same id and version, same configuration: still two incomparable groups.
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows.flatMap((row) => [...row.runIds]).sort(), ["run-a", "run-b"]);
-  assert.equal(new Set(rows.map((row) => row.policy)).size, 2);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].runIds, ["run-a", "run-b"]);
+  assert.equal(rows[0].policies.length, 2);
+  assert.equal(rows[0].taskSetSha256s.length, 2);
+  assert.equal(rows[0].benchmarkTaskCount, 226);
+  assert.equal(rows[0].coverage, 1 / 226);
+  assert.equal(rows[0].observations, 2);
 });
 
 await test("leaderboard data: how many trials ran at once does not split a group", () => {
