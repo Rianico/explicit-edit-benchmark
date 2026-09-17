@@ -144,14 +144,17 @@ jobs:
         run: |
           set -euo pipefail
           result="$RUNNER_TEMP/acceptance-result.json"
+          output="$RUNNER_TEMP/acceptance-output.log"
           if [[ "${{ inputs.rebuild_only }}" = "true" ]]; then
-            node scripts/official-acceptance-cli.mjs rebuild | tee "$result"
+            node scripts/official-acceptance-cli.mjs rebuild | tee "$output"
           elif [[ -n "$CANDIDATE" ]]; then
             node scripts/official-acceptance-cli.mjs accept \
-              "$CANDIDATE" | tee "$result"
+              "$CANDIDATE" | tee "$output"
           else
-            node scripts/official-acceptance-cli.mjs poll | tee "$result"
+            node scripts/official-acceptance-cli.mjs poll | tee "$output"
           fi
+          tail --lines=1 "$output" > "$result"
+          jq --exit-status . "$result" > /dev/null
 
       - name: Summarize acceptance batch
         if: always() && steps.acceptance.outcome != 'skipped'
