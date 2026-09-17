@@ -465,7 +465,7 @@ export async function buildDerivedDatasetFromAggregateState(
     id: "explicit-edit-score",
     version: 2,
     formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
-    repetitionUnit: "mean within configurationHash × task",
+    repetitionUnit: "mean within user configuration × task",
     rollup: "equal configurations within task; equal tasks",
     source: "scripts/result-aggregation.mjs",
   };
@@ -716,7 +716,7 @@ export async function buildPublicDatasetFromStore(
       id: "explicit-edit-score",
       version: 2,
       formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
-      repetitionUnit: "mean within configurationHash × task",
+      repetitionUnit: "mean within user configuration × task",
       rollup: "equal configurations within task; equal tasks",
       source: "scripts/result-aggregation.mjs",
     },
