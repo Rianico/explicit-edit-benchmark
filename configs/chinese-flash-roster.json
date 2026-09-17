@@ -84,11 +84,10 @@
       }
     },
     {
-      "id": "deepseek-next-flash",
-      "series": "deepseek-next-flash-low",
-      "piModel": "deepseek/deepseek-v4.1-flash-expires-on-0910",
-      "providerModel": "deepseek-v4.1-flash-expires-on-0910",
-      "expiresOn": "2026-09-10",
+      "id": "deepseek-v4.1-flash",
+      "series": "deepseek-v4.1-flash-low",
+      "piModel": "deepseek/deepseek-flash",
+      "providerModel": "deepseek-flash",
       "provider": {
         "id": "deepseek",
         "displayName": "DeepSeek",
