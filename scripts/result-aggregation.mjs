@@ -72,7 +72,11 @@ function exactIdentity(profile, run) {
     policy: canonicalPolicy(run.policy),
     runnerFamily: run.definitions?.runner?.id ?? null,
     runnerVersion: run.definitions?.runner?.version ?? null,
-    modelFamily: profile.modelFamily ?? profile.modelId ?? profile.model,
+    modelFamily:
+      canonicalModelFamily(profile.modelFamily ?? profile.modelId ?? profile.model) ===
+      "deepseek-v4.1-flash"
+        ? "deepseek-v4.1-flash"
+        : (profile.modelFamily ?? profile.modelId ?? profile.model),
     modelVersion: profile.modelVersion ?? profile.model ?? null,
     ...agentHarness,
     provider: profile.provider ?? null,
