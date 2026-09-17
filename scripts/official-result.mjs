@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { executionIdentity } from "./official-identities.mjs";
-import { approvedWorkflow, loadOfficialPolicy } from "./official-policy.mjs";
+import { approvedWorkflow, loadOfficialPolicy, runPolicyForLifecycle } from "./official-policy.mjs";
 import { validateNormalizedRun } from "./validate-normalized-run.mjs";
 import { explicitEditTasks } from "../src/suites/explicit-edit/fixtures.ts";
 import { verifierSha256 } from "./verifier-identity.mjs";
@@ -158,8 +158,9 @@ export async function validateOfficialManifest(
     throw Error("official manifest: normalized schema is not allowed");
   if (manifest.normalized.verifierSha256 !== policy.runner.verifierSha256)
     throw Error("official manifest: verifier does not match policy");
+  const expectedRunPolicy = runPolicyForLifecycle(policy, manifest.lifecycle.state);
   for (const key of ["oracleRecoveries", "retryFailures", "concurrency", "timeoutMs"])
-    if (manifest.normalized.runPolicy[key] !== policy.runPolicy[key])
+    if (manifest.normalized.runPolicy[key] !== expectedRunPolicy[key])
       throw Error(`official manifest: run policy does not match policy: ${key}`);
   const tasks = new Map(policy.runner.tasks.map((task) => [task.id, task.fixtureSha256]));
   if (!manifest.normalized.tasks.length) throw Error("official manifest: empty task selection");

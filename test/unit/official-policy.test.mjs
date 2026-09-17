@@ -3,7 +3,11 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { approvedWorkflow, loadOfficialPolicy } from "../../scripts/official-policy.mjs";
+import {
+  approvedWorkflow,
+  loadOfficialPolicy,
+  runPolicyForLifecycle,
+} from "../../scripts/official-policy.mjs";
 
 const policyFile = new URL("../../policies/official-runs/v1.json", import.meta.url);
 
@@ -24,6 +28,14 @@ test("only an active signer workflow SHA resolves to its pinned runner", async (
   assert.throws(() => approvedWorkflow(policy, "b".repeat(40)), /Unknown signer/);
   active.status = "revoked";
   assert.throws(() => approvedWorkflow(policy, active.sha), /Revoked signer/);
+});
+
+test("full and partial measurements use their exact approved run policies", async () => {
+  const policy = await loadOfficialPolicy(policyFile);
+  assert.deepEqual(runPolicyForLifecycle(policy, "partial-measurement"), policy.runPolicy);
+  assert.deepEqual(runPolicyForLifecycle(policy, "full-measurement"), policy.fullRunPolicy);
+  assert.equal(policy.fullRunPolicy.oracleRecoveries, 5);
+  assert.equal(policy.fullRunPolicy.concurrency, 10);
 });
 
 test("release policy rejects extra and missing fields", async () => {

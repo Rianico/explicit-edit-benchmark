@@ -366,6 +366,11 @@ jobs:
           NODE
           node scripts/validate-normalized-run.mjs \
             "$RUNNER_TEMP/official-extracted/normalized"
+          node --import tsx scripts/official-result.mjs validate-runner \
+            "$RUNNER_TEMP/official-extracted/official-manifest.json" \
+            "$RUNNER_TEMP/official-extracted/normalized" \
+            "policies/official-runs/v1.json" \
+            "${{ needs.resolve.outputs.sha }}"
           MANIFEST="$RUNNER_TEMP/official-extracted/official-manifest.json" \
             RUNNER_SHA="${{ needs.resolve.outputs.sha }}" node -e '
               const manifest = require(process.env.MANIFEST);
