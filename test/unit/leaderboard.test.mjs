@@ -471,7 +471,7 @@ await test("leaderboard data: partial and full runs contribute to one user confi
   };
   const rows = aggregateLeaderboard(
     { runs: [partial, full] },
-    [profiles[0], { ...profiles[0], runId: "run-b" }],
+    [profiles[0], { ...profiles[0], runId: "run-b", configurationHash: "second-hash" }],
     [trials[0], { ...trials[0], runId: "run-b" }],
     [],
   );
@@ -479,6 +479,8 @@ await test("leaderboard data: partial and full runs contribute to one user confi
   assert.deepEqual(rows[0].runIds, ["run-a", "run-b"]);
   assert.equal(rows[0].policies.length, 2);
   assert.equal(rows[0].taskSetSha256s.length, 2);
+
+  assert.deepEqual(rows[0].configurationHashes, ["same-config", "second-hash"]);
   assert.equal(rows[0].benchmarkTaskCount, 226);
   assert.equal(rows[0].coverage, 1 / 226);
   assert.equal(rows[0].observations, 2);
@@ -493,7 +495,7 @@ await test("leaderboard data: how many trials ran at once does not split a group
   };
   const rows = aggregateLeaderboard(
     { runs: [base, { ...base, runId: "run-b", policy: { ...base.policy, concurrency: 10 } }] },
-    [profiles[0], { ...profiles[0], runId: "run-b" }],
+    [profiles[0], { ...profiles[0], runId: "run-b", configurationHash: "second-hash" }],
     [trials[0], { ...trials[0], runId: "run-b" }],
     [],
   );

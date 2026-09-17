@@ -101,7 +101,6 @@ function comparisonIdentity(identity) {
     harnessFamily: identity.harnessFamily,
     harnessVersion: identity.harnessVersion,
     provider: identity.provider,
-    configurationHash: identity.configurationHash,
     transport: identity.transport,
     harnessKind: identity.harnessKind,
     adapterVersion: identity.adapterVersion,
@@ -454,6 +453,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
       policies: new Set(),
       runnerVersions: new Set(),
       concurrencies: new Set(),
+      configurationHashes: new Set(),
       recoveryRounds: 0,
       timeouts: 0,
       infrastructureFailures: 0,
@@ -477,6 +477,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
     if (identity.policy) group.policies.add(identity.policy);
     if (identity.runnerVersion) group.runnerVersions.add(identity.runnerVersion);
     if (identity.concurrency != null) group.concurrencies.add(identity.concurrency);
+    if (identity.configurationHash) group.configurationHashes.add(identity.configurationHash);
     group.recoveryRounds += Math.max(0, trial.rounds - 1);
     group.infrastructureFailures += Number(Boolean(trial.infrastructureFailure));
 
@@ -541,6 +542,9 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
         runnerVersions: [...group.runnerVersions].sort(),
         concurrency: group.concurrencies.size === 1 ? [...group.concurrencies][0] : null,
         concurrencies: [...group.concurrencies].sort((a, b) => a - b),
+        configurationHash:
+          group.configurationHashes.size === 1 ? [...group.configurationHashes][0] : "aggregate",
+        configurationHashes: [...group.configurationHashes].sort(),
         firstExactRate,
         finalExactRate,
         recoveryGain:
@@ -681,7 +685,11 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
     const qualityScore = hierarchicalMean(families, (row) => row.qualityScore);
     const runIds = new Set(group.rows.flatMap((row) => row.runIds));
     const submissionIds = new Set(group.rows.flatMap((row) => row.submissionIds));
-    const configurationHashes = new Set(group.rows.map((row) => row.configurationHash));
+    const configurationHashes = new Set(
+      group.rows
+        .flatMap((row) => row.configurationHashes ?? [row.configurationHash])
+        .filter(Boolean),
+    );
     const reasoningModes = new Set(group.rows.map((row) => row.thinking));
     const representedVersions = new Set(
       group.rows.map((row) => `${row.benchmarkId}\t${row.benchmarkVersion ?? ""}`),
