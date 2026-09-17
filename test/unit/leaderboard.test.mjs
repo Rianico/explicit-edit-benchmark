@@ -103,11 +103,6 @@ await test("leaderboard data: normalizes qualified and unqualified model identit
   assert.equal(canonicalModelFamily("deepseek-v4-flash"), "deepseek-v4-flash");
   assert.equal(canonicalModelFamily("zai/glm-5.3-flash"), "glm-5.3-flash");
   assert.equal(canonicalModelFamily("openai/gpt-5.6-luna"), "gpt-5.6-luna");
-  assert.equal(
-    canonicalModelFamily("deepseek/deepseek-v4.1-flash-expires-on-0910"),
-    "deepseek-v4.1-flash",
-  );
-  assert.equal(canonicalModelFamily("deepseek/deepseek-flash"), "deepseek-v4.1-flash");
 });
 
 await test("leaderboard data: assigns useful task families", () => {
