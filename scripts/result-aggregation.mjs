@@ -84,6 +84,42 @@ function exactIdentity(profile, run) {
   };
 }
 
+// A submitted task selection and its execution policy describe one observation, not a new
+// user-visible configuration. Repeated partial and full runs of the same measured setup share
+// task cells and contribute to one score.
+function comparisonIdentity(identity) {
+  return {
+    benchmarkId: identity.benchmarkId,
+    benchmarkVersion: identity.benchmarkVersion,
+    contract: identity.contract,
+    verifierSha256: identity.verifierSha256,
+    runnerFamily: identity.runnerFamily,
+    modelFamily: identity.modelFamily,
+    modelVersion: identity.modelVersion,
+    agentFamily: identity.agentFamily,
+    agentVersion: identity.agentVersion,
+    harnessFamily: identity.harnessFamily,
+    harnessVersion: identity.harnessVersion,
+    provider: identity.provider,
+    configurationHash: identity.configurationHash,
+    transport: identity.transport,
+    harnessKind: identity.harnessKind,
+    adapterVersion: identity.adapterVersion,
+    configurationLabels: identity.configurationLabels,
+    thinking: identity.thinking,
+  };
+}
+
+function benchmarkIdentity(run) {
+  const benchmark = run.definitions?.benchmark;
+  return JSON.stringify({
+    benchmarkId: benchmark?.id ?? run.contract,
+    benchmarkVersion: benchmark?.version ?? null,
+    contract: run.contract,
+    verifierSha256: run.verifierSha256 ?? null,
+  });
+}
+
 function matchesModelFilter(value, selected) {
   if (!selected || selected.length === 0) return true;
   const canonical = canonicalModelFamily(value);
@@ -355,6 +391,13 @@ export function toolTrialCounts(index, profiles, trials, rounds, toolCalls, tool
  */
 export function aggregateExactConfigurations(index, profiles, trials, rounds, filters = {}) {
   const runs = new Map(index.runs.map((run) => [run.runId, run]));
+  const benchmarkTaskCounts = new Map();
+  for (const run of index.runs) {
+    const declared = run.definitions?.taskSet?.taskIds?.length;
+    if (!Number.isInteger(declared) || declared < 1) continue;
+    const key = benchmarkIdentity(run);
+    benchmarkTaskCounts.set(key, Math.max(benchmarkTaskCounts.get(key) ?? 0, declared));
+  }
   const profileMap = new Map(
     profiles.map((profile) => [`${profile.runId}::${profile.profileId}`, profile]),
   );
@@ -395,7 +438,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
     const identity = exactIdentity(profile, run);
     if (!trialMatchesFilters(identity, family, filters)) continue;
 
-    const key = JSON.stringify(identity);
+    const key = JSON.stringify(comparisonIdentity(identity));
     const group = groups.get(key) ?? {
       ...identity,
       observations: 0,
@@ -407,6 +450,10 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
       sourceProfiles: new Set(),
       trialSamples: [],
       submissionIds: new Set(),
+      taskSetSha256s: new Set(),
+      policies: new Set(),
+      runnerVersions: new Set(),
+      concurrencies: new Set(),
       recoveryRounds: 0,
       timeouts: 0,
       infrastructureFailures: 0,
@@ -426,6 +473,10 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
     group.runIds.add(trial.runId);
     group.sourceProfiles.add(profile.profileId);
     if (run.submissionId) group.submissionIds.add(run.submissionId);
+    if (identity.taskSetSha256) group.taskSetSha256s.add(identity.taskSetSha256);
+    if (identity.policy) group.policies.add(identity.policy);
+    if (identity.runnerVersion) group.runnerVersions.add(identity.runnerVersion);
+    if (identity.concurrency != null) group.concurrencies.add(identity.concurrency);
     group.recoveryRounds += Math.max(0, trial.rounds - 1);
     group.infrastructureFailures += Number(Boolean(trial.infrastructureFailure));
 
@@ -470,12 +521,10 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
         .filter((task) => task.duration.observations > 0)
         .map((task) => task.duration.total / task.duration.observations);
       const taskCount = group.tasks.size;
-      // The benchmark size is what the run declared, not what has been run so far: a partial
-      // run must not look complete just because it is the only evidence so far.
-      const declaredSizes = [...group.runIds]
-        .map((runId) => runs.get(runId)?.definitions?.taskSet?.taskIds?.length)
-        .filter((size) => Number.isInteger(size) && size > 0);
-      const benchmarkTaskCount = declaredSizes.length ? Math.max(...declaredSizes) : taskCount;
+      // Coverage is relative to the largest known canonical scope for this benchmark identity,
+      // never relative to the submitted subset. A one-task run is therefore 1/N evidence.
+      const sampleRun = runs.get(group.runIds.values().next().value);
+      const benchmarkTaskCount = benchmarkTaskCounts.get(benchmarkIdentity(sampleRun)) ?? taskCount;
       const qualityScore =
         firstExactRate == null || finalExactRate == null
           ? null
@@ -484,6 +533,14 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
       return {
         ...group,
         tasks: undefined,
+        taskSetSha256: group.taskSetSha256s.size === 1 ? [...group.taskSetSha256s][0] : null,
+        taskSetSha256s: [...group.taskSetSha256s].sort(),
+        policy: group.policies.size === 1 ? [...group.policies][0] : null,
+        policies: [...group.policies].sort(),
+        runnerVersion: group.runnerVersions.size === 1 ? [...group.runnerVersions][0] : null,
+        runnerVersions: [...group.runnerVersions].sort(),
+        concurrency: group.concurrencies.size === 1 ? [...group.concurrencies][0] : null,
+        concurrencies: [...group.concurrencies].sort((a, b) => a - b),
         firstExactRate,
         finalExactRate,
         recoveryGain:
@@ -559,11 +616,9 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
 
 function rollupIdentity(row) {
   return {
-    // The rules travel with the evidence: rolling up must never pool runs that were judged
-    // by different tasks, a different verifier, or a different policy.
-    taskSetSha256: row.taskSetSha256,
+    // Task selection and run policy are observation provenance. They do not create another
+    // leaderboard configuration.
     verifierSha256: row.verifierSha256,
-    policy: row.policy,
     modelFamily: row.modelFamily,
     modelVersion: row.modelVersion,
     agentFamily: row.agentFamily,
@@ -632,7 +687,15 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       group.rows.map((row) => `${row.benchmarkId}\t${row.benchmarkVersion ?? ""}`),
     );
     const concurrencies = new Set(
-      group.rows.map((row) => row.concurrency).filter((value) => value != null),
+      group.rows
+        .flatMap((row) => row.concurrencies ?? [row.concurrency])
+        .filter((value) => value != null),
+    );
+    const policies = new Set(
+      group.rows.flatMap((row) => row.policies ?? [row.policy]).filter(Boolean),
+    );
+    const taskSetSha256s = new Set(
+      group.rows.flatMap((row) => row.taskSetSha256s ?? [row.taskSetSha256]).filter(Boolean),
     );
     const coverage = mean(group.rows.map((row) => row.coverage)) ?? 0;
     const duration = averageMetric(group.rows, "duration");
@@ -663,6 +726,10 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       benchmarkIds: [...families.keys()].sort(),
       benchmarkVersionCount: representedVersions.size,
       concurrencies: [...concurrencies].sort((a, b) => a - b),
+      policy: policies.size === 1 ? [...policies][0] : null,
+      policies: [...policies].sort(),
+      taskSetSha256: taskSetSha256s.size === 1 ? [...taskSetSha256s][0] : null,
+      taskSetSha256s: [...taskSetSha256s].sort(),
       reasoningModeCount: reasoningModes.size,
       evidenceUnit: reasoningModes.size > 1 ? "task-modes" : "tasks",
       benchmarkId:
