@@ -45,7 +45,7 @@ export function parseRunOptions(args) {
       harness: { type: "string" },
       model: { type: "string" },
       thinking: { type: "string", default: "low" },
-      task: { type: "string", default: "replace-all-10-plain" },
+      task: { type: "string" },
       concurrency: { type: "string", default: "10" },
       "timeout-seconds": { type: "string" },
       "profile-name": { type: "string" },
@@ -67,6 +67,8 @@ export function parseRunOptions(args) {
   if (values.official === values.local)
     throw Error("Choose exactly one run mode: --official or --local");
   if (!values.harness || !values.model) throw Error("Run requires --harness and --model");
+  if (!/^\d+$/.test(values.concurrency) || Number(values.concurrency) < 1)
+    throw Error("Run concurrency must be a positive integer");
   adapterDefinition(values.harness);
   if (values.official && !values["agent-version"])
     throw Error("Official run requires the exact installed --agent-version");
@@ -186,26 +188,23 @@ export async function runOfficial(values, execute = command) {
     ],
     { capture: true },
   );
+  const fields = [
+    `model=${values.model}`,
+    `thinking=${values.thinking}`,
+    `adapter=${values.harness}`,
+    `agent_version=${values["agent-version"]}`,
+    `harness_version=${values["harness-version"]}`,
+    `runtime_version=${values["runtime-version"]}`,
+    `concurrency=${values.concurrency}`,
+  ];
+  if (values.task !== undefined) fields.push(`task=${values.task}`);
   await execute("gh", [
     "workflow",
     "run",
     WORKFLOW,
     "--repo",
     repository,
-    "-f",
-    `model=${values.model}`,
-    "-f",
-    `thinking=${values.thinking}`,
-    "-f",
-    `task=${values.task}`,
-    "-f",
-    `adapter=${values.harness}`,
-    "-f",
-    `agent_version=${values["agent-version"]}`,
-    "-f",
-    `harness_version=${values["harness-version"]}`,
-    "-f",
-    `runtime_version=${values["runtime-version"]}`,
+    ...fields.flatMap((field) => ["-f", field]),
   ]);
 
   let runId;

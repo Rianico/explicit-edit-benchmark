@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -23,6 +23,83 @@ test("one run command requires an explicit official or local mode", () => {
     ]).thinking,
     "low",
   );
+});
+
+test("an official run is full unless the user explicitly selects one task", () => {
+  const full = parseRunOptions([
+    "--official",
+    "--harness",
+    "pi-default",
+    "--model",
+    "openai-codex/gpt-5.6-luna",
+    "--agent-version",
+    "0.85.1",
+  ]);
+  assert.equal(full.task, undefined);
+  assert.equal(full.concurrency, "10");
+
+  const partial = parseRunOptions([
+    "--official",
+    "--harness",
+    "pi-default",
+    "--model",
+    "openai-codex/gpt-5.6-luna",
+    "--agent-version",
+    "0.85.1",
+    "--task",
+    "replace-all-10-plain",
+  ]);
+  assert.equal(partial.task, "replace-all-10-plain");
+});
+
+test("the reusable workflow keeps partial and full execution paths distinct", async () => {
+  const workflow = await readFile(
+    path.join(import.meta.dirname, "../../.github/workflows/official-run.yml"),
+    "utf8",
+  );
+  assert.ok(workflow.includes("description: Optional single task"));
+  assert.ok(!workflow.includes("default: replace-all-10-plain"));
+  assert.ok(workflow.includes('if [[ -n "$TASK" ]]; then'));
+  assert.ok(workflow.includes('--task "$TASK"'));
+  assert.ok(workflow.includes("EXPLICIT_EDIT_SMOKE_PASSED=1 npm run benchmark -- raw-run"));
+  assert.ok(workflow.includes("--oracle-recoveries 5"));
+  assert.ok(workflow.includes('--concurrency "$CONCURRENCY"'));
+});
+
+test("full official dispatch omits task and forwards full-run concurrency", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "benchmark-run-"));
+  const authFile = path.join(root, "auth.json");
+  await writeFile(authFile, '{"openai-codex":{"access":"private"}}\n');
+  const calls = [];
+  let lists = 0;
+  const execute = async (binary, args, options = {}) => {
+    calls.push({ binary, args, options });
+    if (args[0] === "api") return "alice";
+    if (binary === "hf") return "hf_private";
+    if (args[0] === "run" && args[1] === "list") return String(lists++ ? 22 : 21);
+    return "";
+  };
+  try {
+    await runOfficial(
+      {
+        harness: "pi-default",
+        model: "openai-codex/gpt-5.6-luna",
+        thinking: "low",
+        concurrency: "10",
+        "agent-version": "0.85.1",
+        "harness-version": "",
+        "runtime-version": "",
+        "pi-auth-file": authFile,
+        "no-wait": true,
+      },
+      execute,
+    );
+    const dispatch = calls.find(({ args }) => args[0] === "workflow" && args[1] === "run").args;
+    assert.ok(dispatch.includes("concurrency=10"));
+    assert.ok(!dispatch.some((value) => value.startsWith("task=")));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("local mode delegates to the existing complete unverified submission", async () => {

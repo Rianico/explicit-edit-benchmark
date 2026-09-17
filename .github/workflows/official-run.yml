@@ -13,10 +13,15 @@ name: Official benchmark run
         required: true
         type: string
       task:
-        description: One registered benchmark task for the first live smoke
+        description: Optional single task; empty runs the full canonical task set
         required: false
-        default: replace-all-10-plain
+        default: ""
         type: string
+      concurrency:
+        description: Concurrency for a full canonical run
+        required: false
+        default: 10
+        type: number
       adapter:
         description: Registered official adapter id
         required: false
@@ -82,7 +87,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 180
     outputs:
       artifact-id: ${{ steps.producer-artifact.outputs.artifact-id }}
       archive-sha256: ${{ steps.bundle.outputs.sha256 }}
@@ -166,11 +171,12 @@ jobs:
           echo "EXECUTION_PLAN=$plan" >> "$GITHUB_ENV"
           echo "PREPARE_ARGS=$prepare_args" >> "$GITHUB_ENV"
 
-      - name: Run one registered task and export normalized evidence
+      - name: Run requested benchmark scope and export normalized evidence
         env:
           MODEL: ${{ inputs.model }}
           THINKING: ${{ inputs.thinking }}
           TASK: ${{ inputs.task }}
+          CONCURRENCY: ${{ inputs.concurrency }}
           RUNNER_SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           set -euo pipefail
@@ -185,41 +191,61 @@ jobs:
           prepare+=(--output "$config")
           node scripts/prepare-benchmark.mjs "${prepare[@]}"
           npm run benchmark -- check --config "$config"
-          npm run benchmark -- raw-run \
-            --config "$config" \
-            --smoke \
-            --task "$TASK" \
-            --concurrency 1 \
-            --timeout-seconds 180 \
-            --run-id "$run_id"
+
+          if [[ -n "$TASK" ]]; then
+            echo "Running partial official observation for task: $TASK"
+            npm run benchmark -- raw-run \
+              --config "$config" \
+              --smoke \
+              --task "$TASK" \
+              --concurrency 1 \
+              --timeout-seconds 180 \
+              --run-id "$run_id"
+          else
+            [[ "$CONCURRENCY" =~ ^[1-9][0-9]*$ ]]
+            smoke_run_id="${run_id}-smoke"
+            echo "Running required preflight smoke before the full canonical task set"
+            npm run benchmark -- raw-run \
+              --config "$config" \
+              --smoke \
+              --task replace-all-10-plain \
+              --concurrency 1 \
+              --timeout-seconds 180 \
+              --run-id "$smoke_run_id"
+            SMOKE_SUMMARY="results/$smoke_run_id/summary.json" \
+              node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const summary = JSON.parse(await readFile(process.env.SMOKE_SUMMARY, "utf8"));
+          const failed = Object.entries(summary.profiles ?? {})
+            .filter(([, profile]) => profile.trials !== 1 || profile.passed !== 1)
+            .map(([id]) => id);
+          if (failed.length > 0) throw new Error(`Smoke failed for: ${failed.join(", ")}`);
+          NODE
+            echo "Running full canonical task set with concurrency $CONCURRENCY"
+            EXPLICIT_EDIT_SMOKE_PASSED=1 npm run benchmark -- raw-run \
+              --config "$config" \
+              --oracle-recoveries 5 \
+              --concurrency "$CONCURRENCY" \
+              --timeout-seconds 120 \
+              --run-id "$run_id"
+          fi
+
           npm run benchmark -- export "results/$run_id"
           npm run benchmark -- inspect "results/$run_id/normalized"
-          RUN_DIRECTORY="results/$run_id" node --input-type=module <<'NODE'
+
+          if [[ -n "$TASK" ]]; then
+            RUN_DIRECTORY="results/$run_id" node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
           import path from "node:path";
 
           const root = process.env.RUN_DIRECTORY;
-          const content = await readFile(
-            path.join(root, "normalized", "rounds.jsonl"),
-            "utf8",
-          );
-          const rows = content
-            .trim()
-            .split("\n")
-            .filter(Boolean)
-            .map(JSON.parse);
-          const technical = rows.find(
-            (row) => row.timedOut || row.exitCode !== 0,
-          );
+          const content = await readFile(path.join(root, "normalized", "rounds.jsonl"), "utf8");
+          const rows = content.trim().split("\n").filter(Boolean).map(JSON.parse);
+          const technical = rows.find((row) => row.timedOut || row.exitCode !== 0);
           if (technical) {
             const stderr = await readFile(
-              path.join(
-                root,
-                "trials",
-                technical.trialId,
-                "agent",
-                "stderr.log",
-              ),
+              path.join(root, "trials", technical.trialId, "agent", "stderr.log"),
               "utf8",
             ).catch(() => "");
             const reason = stderr
@@ -228,12 +254,10 @@ jobs:
               .find(Boolean)
               ?.replace(/[A-Za-z0-9_.-]{24,}/g, "…");
             const detail = reason ? `: ${reason}` : "";
-            throw new Error(
-              `Technical smoke failure: exit=${technical.exitCode}${detail}`,
-            );
+            throw new Error(`Technical smoke failure: exit=${technical.exitCode}${detail}`);
           }
           NODE
-
+          fi
           artifact="$RUNNER_TEMP/official-result.tar.gz"
           options=$(node -e '
             process.stdout.write(JSON.stringify({
