@@ -14,10 +14,7 @@ export function parseJsonLines(text) {
 
 /** Return one stable model identity whether its provider prefix was recorded or omitted. */
 export function canonicalModelFamily(value) {
-  const family = String(value).split("/").at(-1);
-  return ["deepseek-v4.1-flash-expires-on-0910", "deepseek-flash"].includes(family)
-    ? "deepseek-v4.1-flash"
-    : family;
+  return String(value).split("/").at(-1);
 }
 
 /** Return a stable, human-readable family for a benchmark task id. */
@@ -72,11 +69,7 @@ function exactIdentity(profile, run) {
     policy: canonicalPolicy(run.policy),
     runnerFamily: run.definitions?.runner?.id ?? null,
     runnerVersion: run.definitions?.runner?.version ?? null,
-    modelFamily:
-      canonicalModelFamily(profile.modelFamily ?? profile.modelId ?? profile.model) ===
-      "deepseek-v4.1-flash"
-        ? "deepseek-v4.1-flash"
-        : (profile.modelFamily ?? profile.modelId ?? profile.model),
+    modelFamily: profile.modelFamily ?? profile.modelId ?? profile.model,
     modelVersion: profile.modelVersion ?? profile.model ?? null,
     ...agentHarness,
     provider: profile.provider ?? null,
