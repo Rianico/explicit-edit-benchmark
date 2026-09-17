@@ -14,7 +14,10 @@ export function parseJsonLines(text) {
 
 /** Return one stable model identity whether its provider prefix was recorded or omitted. */
 export function canonicalModelFamily(value) {
-  return String(value).split("/").at(-1);
+  const family = String(value).split("/").at(-1);
+  return ["deepseek-v4.1-flash-expires-on-0910", "deepseek-flash"].includes(family)
+    ? "deepseek-v4.1-flash"
+    : family;
 }
 
 /** Return a stable, human-readable family for a benchmark task id. */
