@@ -14,6 +14,12 @@ const OAUTH_SCHEMA = {
   type: "oauth",
 };
 
+const API_KEY_SCHEMA = {
+  required: ["type", "key"],
+  allowed: ["type", "key"],
+  type: "api_key",
+};
+
 /** Resolve package evidence for the canonical adapter selected by either transport. */
 function adapterRecipe(id) {
   let adapter;
@@ -34,8 +40,8 @@ function adapterRecipe(id) {
         ? [{ role: "runtime", name: adapter.runtimePackage, versionInput: "runtimeVersion" }]
         : []),
     ],
-    providers: ["openai-codex"],
-    credentialSchemas: { "openai-codex": OAUTH_SCHEMA },
+    providers: ["openai-codex", "deepseek"],
+    credentialSchemas: { "openai-codex": OAUTH_SCHEMA, deepseek: API_KEY_SCHEMA },
   };
 }
 

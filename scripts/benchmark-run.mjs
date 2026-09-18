@@ -44,6 +44,7 @@ export function parseRunOptions(args) {
       local: { type: "boolean", default: false },
       harness: { type: "string" },
       model: { type: "string" },
+      provider: { type: "string" },
       thinking: { type: "string", default: "low" },
       task: { type: "string" },
       concurrency: { type: "string", default: "10" },
@@ -67,6 +68,10 @@ export function parseRunOptions(args) {
   if (values.official === values.local)
     throw Error("Choose exactly one run mode: --official or --local");
   if (!values.harness || !values.model) throw Error("Run requires --harness and --model");
+  const modelProvider = values.model.split("/", 1)[0];
+  values.provider ??= modelProvider;
+  if (values.provider !== modelProvider)
+    throw Error("Run provider must match the provider-qualified model id");
   if (!/^\d+$/.test(values.concurrency) || Number(values.concurrency) < 1)
     throw Error("Run concurrency must be a positive integer");
   adapterDefinition(values.harness);
@@ -190,6 +195,7 @@ export async function runOfficial(values, execute = command) {
   );
   const fields = [
     `model=${values.model}`,
+    `provider=${values.provider}`,
     `thinking=${values.thinking}`,
     `adapter=${values.harness}`,
     `agent_version=${values["agent-version"]}`,
