@@ -157,7 +157,7 @@ await test("the bb example publishes a complete identity with separate versions"
   process.env.BB_NODE_RUNTIME = "/opt/node";
   process.env.BB_SERVER_URL = "http://127.0.0.1:3000";
   process.env.BB_MODEL = "agent-proxy/gpt-5.6-luna";
-  process.env.BB_MODEL_PROVIDER = "agent-proxy";
+  process.env.BB_INFERENCE_PROVIDER = "openai-codex";
   process.env.BB_TRANSPORT = "agent-proxy-responses";
   const config = (await import("../../examples/bb/benchmark.config.mjs")).default;
   const profiles = await resolveBenchmarkProfiles(config);
@@ -196,7 +196,7 @@ await test("the bb example publishes a complete identity with separate versions"
   );
   assert.equal(profile.seedFiles["home/.pi/agent/auth.json"], undefined);
   assert.equal(profile.seedFiles["home/.pi/agent/models.json"], "/etc/bb-example/models.json");
-  assert.equal(profile.provider, "agent-proxy");
+  assert.equal(profile.provider, "openai-codex");
   assert.equal(profile.transport, "agent-proxy-responses");
   assert.equal(profile.env.BB_SERVER_URL, "http://127.0.0.1:3000");
   assert.equal(profile.env.PATH, "/opt/node/bin:/usr/local/bin:/usr/bin:/bin");

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canonicalizeModelProviderRows,
   completeRunEvidence,
   familyGroupScores,
   latestHarnessGroups,
@@ -23,6 +24,37 @@ function row(version, taskIds, passed) {
     observations: taskIds.length,
   };
 }
+
+test("public projections repair Luna provider identity and configuration references", () => {
+  const registry = {
+    models: [
+      {
+        id: "gpt-5.6-luna",
+        providerAliases: [{ from: "agent-proxy", to: "openai-codex" }],
+      },
+    ],
+  };
+  const configuration = {
+    modelFamily: "gpt-5.6-luna",
+    provider: "agent-proxy",
+    configurationHash: "old-hash",
+  };
+  const profile = {
+    modelFamily: "gpt-5.6-luna",
+    provider: "agent-proxy",
+    configurationHash: "old-hash",
+  };
+
+  const canonical = canonicalizeModelProviderRows([profile], [configuration], registry);
+
+  assert.equal(canonical.profiles[0].provider, "openai-codex");
+  assert.equal(canonical.configurations[0].provider, "openai-codex");
+  assert.match(canonical.configurations[0].configurationHash, /^[a-f0-9]{64}$/u);
+  assert.equal(
+    canonical.profiles[0].configurationHash,
+    canonical.configurations[0].configurationHash,
+  );
+});
 
 test("published model rows keep providers separate", () => {
   const groups = {

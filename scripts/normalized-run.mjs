@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { callData, toolCategory } from "./build-trajectory-analysis.mjs";
 import { inspectHarnessOutput } from "./harness-runtime.mjs";
+import { canonicalModelProvider, loadModelRegistry } from "./model-registry.mjs";
 
 const COMMAND_FEATURES = [
   ["search", /(^|[;&|()\s])(rg|grep|find)(\s|$)/],
@@ -252,6 +253,13 @@ export async function exportNormalizedRun(rootDirectory, outputDirectory, option
     ]),
   );
   for (const [id, adapter] of Object.entries(adapters)) assertNormalizedIdentity(adapter, id);
+  const modelRegistry = await loadModelRegistry();
+  for (const adapter of Object.values(adapters))
+    adapter.provider = canonicalModelProvider(
+      modelRegistry,
+      adapter.modelFamily ?? adapter.model,
+      adapter.provider ?? null,
+    );
   const schemaVersion = 2;
   const configurationsByHash = new Map();
   const profiles = Object.entries(adapters).map(([id, adapter]) => {

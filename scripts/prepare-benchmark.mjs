@@ -231,11 +231,11 @@ function ompSettings(provider, model, thinking, env) {
 }
 function canonicalIdentity({
   harness,
-  model,
   canonicalModel,
   thinking,
   version,
   provider,
+  providerId,
   harnessVersion,
 }) {
   const agentFamily = ADAPTERS[harness]?.agentFamily;
@@ -250,7 +250,7 @@ function canonicalIdentity({
     agentVersion: exactVersion,
     modelFamily: canonicalModel,
     modelVersion: canonicalModel,
-    provider: provider?.id ?? (model.includes("/") ? model.slice(0, model.indexOf("/")) : null),
+    provider: providerId,
     harnessVersion: harnessVersion ?? exactVersion,
     adapterVersion: "1",
     configurationLabels: [`harness/${harness}`],
@@ -643,12 +643,12 @@ async function main() {
     ...runtimeAdapter,
     ...canonicalIdentity({
       harness: values.harness,
-      model: values.model,
       canonicalModel: canonicalModel.id,
       thinking: values.thinking,
       version: runtimeAdapter.version,
       provider,
       harnessVersion: values["harness-version"],
+      providerId,
     }),
   };
   await mkdir(path.dirname(path.resolve(values.output)), { recursive: true });

@@ -13,6 +13,10 @@ function validateRegistry(registry) {
   for (const model of registry.models ?? []) {
     if (!ID.test(model.id) || typeof model.displayName !== "string" || !model.displayName)
       throw Error("Invalid canonical model identity");
+    for (const alias of model.providerAliases ?? []) {
+      if ((alias.from !== null && !ID.test(alias.from)) || !ID.test(alias.to))
+        throw Error("Invalid model provider alias");
+    }
     for (const route of model.routes ?? []) {
       const key = `${route.provider}/${route.selector}`;
       if (routes.has(key)) throw Error(`Duplicate model route: ${key}`);
@@ -25,6 +29,15 @@ function validateRegistry(registry) {
 /** Load the immutable model identity registry shipped with this runner revision. */
 export async function loadModelRegistry() {
   return validateRegistry(JSON.parse(await readFile(REGISTRY_FILE, "utf8")));
+}
+
+/** Return a model's canonical inference provider, or preserve the observed provider. */
+export function canonicalModelProvider(registry, modelFamily, observedProvider) {
+  const id = String(modelFamily).split("/").at(-1);
+  const model = registry.models.find((candidate) => candidate.id === id);
+  return (
+    model?.providerAliases?.find((alias) => alias.from === observedProvider)?.to ?? observedProvider
+  );
 }
 
 /** Resolve a provider selector while preserving the exact selector used on the wire. */
