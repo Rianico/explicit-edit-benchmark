@@ -41,6 +41,22 @@ test("identity migration replaces canonical values and reconnects configuration 
   assert.doesNotMatch(JSON.stringify(rows), /model-old/);
 });
 
+test("migration does not rewrite a canonical name that contains the old selector", () => {
+  assert.deepEqual(
+    replaceStrings(
+      {
+        old: "deepseek/deepseek-flash",
+        canonical: "opencode-go/deepseek-v4.1-flash",
+      },
+      "deepseek-flash",
+      "deepseek-v4.1-flash",
+    ),
+    {
+      old: "deepseek/deepseek-v4.1-flash",
+      canonical: "opencode-go/deepseek-v4.1-flash",
+    },
+  );
+});
 test("generic replacement has no knowledge of a particular model", () => {
   assert.deepEqual(replaceStrings({ value: "provider/before" }, "before", "after"), {
     value: "provider/after",
