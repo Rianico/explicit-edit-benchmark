@@ -73,6 +73,7 @@ await test("Pi and Codex metrics use finalized events without double-counting", 
     totalTokens: 135,
     failedToolCalls: 1,
     invalidToolCalls: null,
+    providerFailure: null,
   });
 
   const codexOutput = path.join(root, "codex.jsonl");

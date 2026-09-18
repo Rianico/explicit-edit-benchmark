@@ -255,6 +255,7 @@ async function lane() {
               totalTokens: metrics.totalTokens ?? null,
               failedToolCalls: metrics.failedToolCalls ?? null,
               invalidToolCalls: metrics.invalidToolCalls ?? null,
+              providerFailure: metrics.providerFailure ?? null,
             };
           },
           verify: () => compareExplicitFiles(workspace, task.expected),
@@ -309,6 +310,7 @@ async function lane() {
           totalTokens: metrics.totalTokens ?? null,
           failedToolCalls: metrics.failedToolCalls ?? null,
           invalidToolCalls: metrics.invalidToolCalls ?? null,
+          providerFailure: metrics.providerFailure ?? null,
           errors: metrics.errors,
         };
       }

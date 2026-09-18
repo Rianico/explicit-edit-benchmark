@@ -98,7 +98,9 @@ coverage × (0.75 × first exact rate + 0.25 × final exact rate)
 
 `scripts/result-aggregation.mjs` defines the Score and the shared aggregation rules. First exact, final exact, EOF-normalized results, recovery, timeouts, duration, cost, and tokens all stay separate facts.
 
-Explorer rollups for model, agent, harness, and reasoning families use the median Score of complete configurations. Partial configurations stay in the evidence and configuration table but do not affect a family headline. Family views retain the score distribution and the complete and total configuration counts.
+Explorer rollups use the median Score of complete eligible configurations. Primary model rankings group by model family and provider; a provider-agnostic model-family summary remains secondary. Agent, harness, and reasoning families keep their existing identities. Partial or provider-quarantined configurations stay in the evidence and configuration table but do not affect rankings or badges. Family views retain the score distribution and the complete and total configuration counts.
+
+Provider quarantine is configuration-scoped. It starts at 50 trials when confirmed provider-attributable terminal failures reach 20%. Only the safe enum in schema-v2 round evidence can contribute. A timeout or generic error is not provider attribution, and schema-v1 history is not reclassified.
 
 Acceptance generates:
 

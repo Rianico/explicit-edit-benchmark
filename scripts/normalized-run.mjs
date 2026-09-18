@@ -252,7 +252,7 @@ export async function exportNormalizedRun(rootDirectory, outputDirectory, option
     ]),
   );
   for (const [id, adapter] of Object.entries(adapters)) assertNormalizedIdentity(adapter, id);
-  const schemaVersion = 1;
+  const schemaVersion = 2;
   const configurationsByHash = new Map();
   const profiles = Object.entries(adapters).map(([id, adapter]) => {
     const configuration = safeConfiguration(adapter);
@@ -278,6 +278,7 @@ export async function exportNormalizedRun(rootDirectory, outputDirectory, option
                 exitCode: result.exitCode,
                 signal: result.signal,
                 timedOut: result.timedOut,
+                providerFailure: result.providerFailure ?? null,
                 processSeconds: result.processSeconds,
                 toolCalls: result.toolCalls,
                 modelRounds: result.modelRounds,
@@ -324,6 +325,7 @@ export async function exportNormalizedRun(rootDirectory, outputDirectory, option
         normalizedPassed: exactPassed || difference === "eof",
         difference,
         timedOut: Boolean(attempt.execution?.timedOut),
+        providerFailure: attempt.execution?.providerFailure ?? historical.providerFailure ?? null,
         exitCode: attempt.execution?.exitCode ?? null,
         seconds: attempt.execution?.processSeconds ?? null,
         toolCallCount: attempt.execution?.toolCalls ?? null,

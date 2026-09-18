@@ -233,6 +233,19 @@ export function aggregateFamilyScore(rows, scoreField = "score") {
     completeConfigurationCount: completeRows.length,
   };
 }
+/** Decide whether one configuration has enough confirmed provider failures to leave rankings. */
+export function providerFailureEligibility(observations, providerFailureTrials) {
+  const providerFailureRate = observations ? providerFailureTrials / observations : null;
+  const quarantined =
+    observations >= 50 && providerFailureRate != null && providerFailureRate >= 0.2;
+  return {
+    eligible: !quarantined,
+    reason: quarantined ? "provider-failure-rate" : null,
+    providerFailureTrials,
+    providerFailureRate,
+  };
+}
+
 function configurationTaskCells(samples) {
   const tasks = new Map();
   for (const sample of samples) {
@@ -389,11 +402,13 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
       rounds: 0,
       timeouts: 0,
       duration: metricState(),
+      providerFailure: false,
       cost: metricState(),
       tokens: metricState(),
     };
     stats.rounds += 1;
     stats.timeouts += Number(round.timedOut === true);
+    stats.providerFailure ||= typeof round.providerFailure === "string";
     for (const [name, field] of [
       ["duration", "seconds"],
       ["cost", "costUsd"],
@@ -439,6 +454,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
       timeouts: 0,
       infrastructureFailures: 0,
       duration: metricState(),
+      providerFailureTrials: 0,
       cost: metricState(),
       tokens: metricState(),
     };
@@ -474,6 +490,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
     const stats = roundStats.get(`${trial.runId}::${trial.trialId}`);
     if (stats && stats.rounds === trial.rounds) {
       group.timeouts += stats.timeouts;
+      group.providerFailureTrials += Number(stats.providerFailure);
       for (const name of metricNames) {
         if (stats[name].observations === stats.rounds) {
           group[name].total += stats[name].total;
@@ -512,6 +529,7 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
           ? null
           : 0.75 * firstExactRate + 0.25 * finalExactRate;
       const coverage = benchmarkTaskCount ? taskCount / benchmarkTaskCount : null;
+      const ranking = providerFailureEligibility(group.observations, group.providerFailureTrials);
       return {
         ...group,
         tasks: undefined,
@@ -536,6 +554,10 @@ export function aggregateExactConfigurations(index, profiles, trials, rounds, fi
         benchmarkTaskCount,
         coverage,
         complete: taskCount === benchmarkTaskCount,
+        rankingEligible: ranking.eligible,
+        rankingEligibilityReason: ranking.reason,
+        providerFailureTrials: ranking.providerFailureTrials,
+        providerFailureRate: ranking.providerFailureRate,
         durationSummary: {
           averageCase: metricAverage(group, "duration"),
           coveredRun:
@@ -655,8 +677,10 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
   }
 
   const rolled = [...groups.values()].map((group) => {
+    const eligibleRows = group.rows.filter((row) => row.rankingEligible !== false);
+    const rankingRows = eligibleRows.length ? eligibleRows : [];
     const families = new Map();
-    for (const row of group.rows) {
+    for (const row of rankingRows) {
       const versions = families.get(row.benchmarkId) ?? new Map();
       const values = versions.get(row.benchmarkVersion) ?? [];
       values.push(row);
@@ -686,7 +710,13 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
     const taskSetSha256s = new Set(
       group.rows.flatMap((row) => row.taskSetSha256s ?? [row.taskSetSha256]).filter(Boolean),
     );
-    const coverage = mean(group.rows.map((row) => row.coverage)) ?? 0;
+    const coverage = mean(rankingRows.map((row) => row.coverage)) ?? 0;
+    const providerFailureTrials = group.rows.reduce(
+      (total, row) => total + (row.providerFailureTrials ?? 0),
+      0,
+    );
+    const observations = group.rows.reduce((total, row) => total + row.observations, 0);
+    const quarantinedConfigurationCount = group.rows.length - eligibleRows.length;
     const duration = averageMetric(group.rows, "duration");
     const coveredRuns = group.rows
       .map((row) => row.durationSummary.coveredRun)
@@ -701,7 +731,12 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       firstExactRate: hierarchicalMean(families, (row) => row.firstExactRate),
       finalExactRate: hierarchicalMean(families, (row) => row.finalExactRate),
       recoveryGain: hierarchicalMean(families, (row) => row.recoveryGain),
-      observations: group.rows.reduce((total, row) => total + row.observations, 0),
+      observations,
+      rankingEligible: eligibleRows.length > 0,
+      rankingEligibilityReason: eligibleRows.length > 0 ? null : "provider-failure-rate",
+      quarantinedConfigurationCount,
+      providerFailureTrials,
+      providerFailureRate: observations ? providerFailureTrials / observations : null,
       trialSamples: group.rows.flatMap((row) => row.trialSamples ?? []),
       configurationTaskCells: group.rows.flatMap(
         (row) => row.configurationTaskCells ?? configurationTaskCells(row.trialSamples ?? []),
@@ -710,7 +745,7 @@ export function aggregateLeaderboard(index, profiles, trials, rounds, filters = 
       taskCount: group.rows.reduce((total, row) => total + row.taskCount, 0),
       benchmarkTaskCount: Math.max(...group.rows.map((row) => row.benchmarkTaskCount)),
       coverage,
-      complete: coverage === 1,
+      complete: eligibleRows.length > 0 && coverage === 1,
       benchmarkFamilyCount: families.size,
       benchmarkIds: [...families.keys()].sort(),
       benchmarkVersionCount: representedVersions.size,

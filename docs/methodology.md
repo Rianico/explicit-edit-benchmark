@@ -24,7 +24,9 @@ Coverage is the share of the declared task set observed at least once. Partial r
 
 Owner, display labels, run IDs, timestamps, partial task selections, and scheduling concurrency do not create new experimental cells. Different benchmark contracts or verifier identities remain separate. Task-set and run-policy identities stay attached as provenance. Raw observations remain in the Dataset when scoring rules change.
 
-Explorer family scores use a different rollup because they summarize configurations rather than tasks. A model, agent, harness, or reasoning family is scored by the median Score of its complete configurations. Partial configurations remain visible but do not enter the family median. The generated views also publish the mean, quartiles, range, and number of complete configurations so readers can see the spread behind the headline value. Task-family slices use only configurations whose full benchmark evidence is complete.
+Explorer family scores use a different rollup because they summarize configurations rather than tasks. Primary model rows identify a model route: model family plus provider. A provider-agnostic model-family summary remains available as a secondary view. Each model route, model family, agent, harness, or reasoning family is scored by the median Score of its complete eligible configurations. Partial and quarantined configurations remain visible but do not enter the family median. The generated views also publish the mean, quartiles, range, and number of complete configurations so readers can see the spread behind the headline value. Task-family slices use only configurations whose full benchmark evidence is complete.
+
+A configuration is quarantined from rankings and badges after at least 50 trials when at least 20% of its trials have a confirmed provider-attributable terminal failure. Accepted evidence is never removed. Generic timeouts, process exits, and error prose do not count. Historical schema-v1 observations have no provider-failure attribution and are never inferred retroactively. Built-in adapters currently publish `null` until an adapter exposes a documented machine-readable cause.
 
 ## Recovery
 

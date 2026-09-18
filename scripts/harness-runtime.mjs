@@ -435,5 +435,7 @@ export async function inspectHarnessOutput(kind, file) {
     totalTokens: usage?.totalTokens ?? null,
     failedToolCalls,
     invalidToolCalls,
+    // Built-in adapters currently expose no documented machine-readable provider cause.
+    providerFailure: null,
   };
 }

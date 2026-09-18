@@ -30,34 +30,40 @@ function withRunId(content, runId) {
 }
 
 /**
- * One row per model family, built from the same aggregates the Explorer shows. This is the table
- * people ask for first: how a model did overall, across every harness that ran it.
+ * One row per model route (model family plus provider), built from the same aggregates the
+ * Explorer shows. Provider-agnostic model-family summaries remain in views.json.
  */
 /** Percent for the card, or a dash when a value was never observed. */
 function formatScore(value) {
   return value == null ? "-" : `${(value * 100).toFixed(1)}%`;
 }
 
-function modelLeaderboard(groups = {}, leaderboardRows = []) {
+export function modelLeaderboard(groups = {}, leaderboardRows = []) {
   const harnesses = new Map();
-  for (const row of leaderboardRows) {
-    const families = harnesses.get(row.modelFamily) ?? new Set();
+  for (const row of leaderboardRows.filter((row) => row.rankingEligible !== false)) {
+    const route = `${row.modelFamily}\t${row.provider ?? "unknown"}`;
+    const families = harnesses.get(route) ?? new Set();
     families.add(row.harnessFamily);
-    harnesses.set(row.modelFamily, families);
+    harnesses.set(route, families);
   }
   return Object.entries(groups)
-    .map(([modelFamily, group]) => ({
-      modelFamily,
-      score: group.score ?? null,
-      qualityScore: group.qualityScore ?? null,
-      coverage: group.coverage ?? null,
-      firstExactRate: group.firstExactRate ?? null,
-      finalExactRate: group.finalExactRate ?? null,
-      taskCount: group.taskCount ?? null,
-      benchmarkTaskCount: group.benchmarkTaskCount ?? null,
-      observations: group.observations ?? null,
-      harnessFamilies: [...(harnesses.get(modelFamily) ?? [])].sort(),
-    }))
+    .map(([modelRoute, group]) => {
+      const [modelFamily, provider = "unknown"] = modelRoute.split("\t");
+      return {
+        modelRoute,
+        modelFamily,
+        provider,
+        score: group.score ?? null,
+        qualityScore: group.qualityScore ?? null,
+        coverage: group.coverage ?? null,
+        firstExactRate: group.firstExactRate ?? null,
+        finalExactRate: group.finalExactRate ?? null,
+        taskCount: group.taskCount ?? null,
+        benchmarkTaskCount: group.benchmarkTaskCount ?? null,
+        observations: group.observations ?? null,
+        harnessFamilies: [...(harnesses.get(modelRoute) ?? [])].sort(),
+      };
+    })
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 }
 
@@ -112,7 +118,7 @@ function datasetCard({ includeSubmissions = false, models = [] } = {}) {
     "",
     ...(models.length
       ? [
-          "## Leaderboard by model",
+          "## Leaderboard by model route",
           "",
           "Score v2 = coverage × quality, where quality is 75% first exact and 25% final exact.",
           "Repeated runs are averaged inside each configuration and task; configurations then have",
@@ -121,11 +127,11 @@ function datasetCard({ includeSubmissions = false, models = [] } = {}) {
           "[Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer) breaks them down by",
           "harness, version and reasoning mode.",
           "",
-          "| Model | Score | Coverage | Tasks | Observations | Harnesses |",
-          "| --- | --- | --- | --- | --- | --- |",
+          "| Model | Provider | Score | Coverage | Tasks | Observations | Harnesses |",
+          "| --- | --- | --- | --- | --- | --- | --- |",
           ...models.map(
             (row) =>
-              `| \`${row.modelFamily}\` | ${formatScore(row.score)} | ${formatScore(row.coverage)} | ${row.taskCount ?? "-"} | ${row.observations ?? "-"} | ${row.harnessFamilies.length} |`,
+              `| \`${row.modelFamily}\` | \`${row.provider}\` | ${formatScore(row.score)} | ${formatScore(row.coverage)} | ${row.taskCount ?? "-"} | ${row.observations ?? "-"} | ${row.harnessFamilies.length} |`,
           ),
           "",
           "The harness list behind each row is in `data/models.jsonl.gz`, and `views.json` holds the same",
@@ -189,14 +195,22 @@ function familyConfigurationKey(row) {
 /** Build median family scores from configurations that have complete benchmark evidence. */
 export function familyGroupScores(rows, eligibleRows = rows, scoreField = "score") {
   const eligible = new Set(
-    eligibleRows.filter((row) => row.complete === true).map(familyConfigurationKey),
+    eligibleRows
+      .filter((row) => row.complete === true && row.rankingEligible !== false)
+      .map(familyConfigurationKey),
   );
-  const dimensions = ["modelFamily", "agentFamily", "harnessFamily", "thinking"];
+  const dimensions = {
+    modelRoute: (row) => `${row.modelFamily}\t${row.provider ?? "unknown"}`,
+    modelFamily: (row) => row.modelFamily,
+    agentFamily: (row) => row.agentFamily,
+    harnessFamily: (row) => row.harnessFamily,
+    thinking: (row) => row.thinking,
+  };
   return Object.fromEntries(
-    dimensions.map((dimension) => [
+    Object.entries(dimensions).map(([dimension, select]) => [
       dimension,
       Object.fromEntries(
-        [...Map.groupBy(rows, (row) => row[dimension])].map(([name, members]) => [
+        [...Map.groupBy(rows, select)].map(([name, members]) => [
           name,
           aggregateFamilyScore(
             members.map((row) => ({
@@ -223,7 +237,11 @@ export function latestHarnessGroups(rows) {
             current == null || compareVersions(current, version) < 0 ? version : current,
           null,
         );
-      const group = aggregateFamilyScore(members.filter((row) => row.harnessVersion === latest));
+      const group = aggregateFamilyScore(
+        members
+          .filter((row) => row.harnessVersion === latest)
+          .map((row) => ({ ...row, complete: row.complete && row.rankingEligible !== false })),
+      );
       return [family, { ...group, harnessVersion: latest }];
     }),
   );
@@ -556,7 +574,9 @@ export async function buildDerivedDatasetFromAggregateState(
     formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
     repetitionUnit: "mean within user configuration × task",
     rollup: "equal configurations within task; equal tasks",
-    familyRollup: "median of complete configuration scores",
+    familyRollup: "median of complete eligible configuration scores",
+    primaryModelIdentity: "model family + provider",
+    providerQuarantine: "at least 50 trials and at least 20% confirmed provider failures",
     source: "scripts/result-aggregation.mjs",
   };
   const leaderboardRows = aggregateLeaderboard(
@@ -611,7 +631,7 @@ export async function buildDerivedDatasetFromAggregateState(
       evidence.toolCalls,
     ),
   };
-  const models = modelLeaderboard(views.groups.modelFamily, leaderboardRows);
+  const models = modelLeaderboard(views.groups.modelRoute, leaderboardRows);
   const modelsContent =
     models.map((row) => JSON.stringify(row)).join("\n") + (models.length ? "\n" : "");
   const modelsCompressed = gzipSync(modelsContent, { level: 6, mtime: 0 });
@@ -805,7 +825,9 @@ export async function buildPublicDatasetFromStore(
       formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
       repetitionUnit: "mean within user configuration × task",
       rollup: "equal configurations within task; equal tasks",
-      familyRollup: "median of complete configuration scores",
+      familyRollup: "median of complete eligible configuration scores",
+      primaryModelIdentity: "model family + provider",
+      providerQuarantine: "at least 50 trials and at least 20% confirmed provider failures",
       source: "scripts/result-aggregation.mjs",
     },
     rows: serializeLeaderboard(
@@ -840,7 +862,7 @@ export async function buildPublicDatasetFromStore(
     ),
     toolUsage: aggregateToolUsage(publicIndex, allProfiles, allTrials, allRounds, allToolCalls),
   };
-  const models = modelLeaderboard(views.groups.modelFamily, leaderboardRows);
+  const models = modelLeaderboard(views.groups.modelRoute, leaderboardRows);
   const modelsContent =
     models.map((row) => JSON.stringify(row)).join("\n") + (models.length ? "\n" : "");
   const modelsCompressed = gzipSync(modelsContent, { level: 6, mtime: 0 });

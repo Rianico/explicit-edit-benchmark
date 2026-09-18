@@ -69,6 +69,8 @@ function compileRuns({ run, profiles, trials, rounds, toolCalls }) {
           trial,
           observedRounds: trialRounds.length,
           timeouts: trialRounds.filter((row) => row.timedOut === true).length,
+          providerFailures: trialRounds.filter((row) => typeof row.providerFailure === "string")
+            .length,
           metrics,
           tools: toolsByTrial.get(key) ?? {},
         };
@@ -144,6 +146,7 @@ function syntheticRounds(fact) {
       trialId: fact.trial.trialId,
       roundId: `aggregate-${fact.trial.trialId}-${index + 1}`,
       timedOut: index < fact.timeouts,
+      providerFailure: index < (fact.providerFailures ?? 0) ? "rate-limit" : null,
     };
     for (const field of ROUND_METRICS) {
       const metric = fact.metrics[field];
