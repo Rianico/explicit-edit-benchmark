@@ -52,7 +52,7 @@ export function pinCallerTemplate(text, workflowSha, policySha) {
       return `${prefix}${policySha}`;
     },
   );
-  if (submitCount !== 2) throw Error(`Unexpected caller submit pin layout: ${submitCount}`);
+  if (submitCount !== 3) throw Error(`Unexpected caller policy/submit pin layout: ${submitCount}`);
   return complete;
 }
 
