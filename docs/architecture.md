@@ -98,6 +98,8 @@ coverage × (0.75 × first exact rate + 0.25 × final exact rate)
 
 `scripts/result-aggregation.mjs` defines the Score and the shared aggregation rules. First exact, final exact, EOF-normalized results, recovery, timeouts, duration, cost, and tokens all stay separate facts.
 
+Explorer rollups for model, agent, harness, and reasoning families use the median Score of complete configurations. Partial configurations stay in the evidence and configuration table but do not affect a family headline. Family views retain the score distribution and the complete and total configuration counts.
+
 Acceptance generates:
 
 - `leaderboard.json`, the canonical configuration ranking;

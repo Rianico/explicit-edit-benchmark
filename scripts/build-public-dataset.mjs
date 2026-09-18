@@ -9,7 +9,7 @@ import { componentSources } from "./component-sources.mjs";
 import { validateNormalizedRun } from "./validate-normalized-run.mjs";
 import { applyExclusions, exclusionPolicyRevision, loadExclusionRegistry } from "./exclusions.mjs";
 import {
-  aggregateGroupScore,
+  aggregateFamilyScore,
   aggregateLeaderboard,
   aggregateToolUsage,
   taskFamily,
@@ -164,6 +164,52 @@ function badgeColor(score) {
   return "red";
 }
 
+function familyConfigurationKey(row) {
+  return JSON.stringify([
+    row.benchmarkId,
+    row.benchmarkVersion,
+    row.contract,
+    row.verifierSha256,
+    row.runnerFamily,
+    row.modelFamily,
+    row.modelVersion,
+    row.agentFamily,
+    row.agentVersion,
+    row.harnessFamily,
+    row.harnessVersion,
+    row.provider,
+    row.transport,
+    row.harnessKind,
+    row.adapterVersion,
+    row.configurationLabels ? [...row.configurationLabels].sort() : [],
+    row.thinking,
+  ]);
+}
+
+/** Build median family scores from configurations that have complete benchmark evidence. */
+export function familyGroupScores(rows, eligibleRows = rows, scoreField = "score") {
+  const eligible = new Set(
+    eligibleRows.filter((row) => row.complete === true).map(familyConfigurationKey),
+  );
+  const dimensions = ["modelFamily", "agentFamily", "harnessFamily", "thinking"];
+  return Object.fromEntries(
+    dimensions.map((dimension) => [
+      dimension,
+      Object.fromEntries(
+        [...Map.groupBy(rows, (row) => row[dimension])].map(([name, members]) => [
+          name,
+          aggregateFamilyScore(
+            members.map((row) => ({
+              ...row,
+              complete: eligible.has(familyConfigurationKey(row)),
+            })),
+            scoreField,
+          ),
+        ]),
+      ),
+    ]),
+  );
+}
 /** Score the highest accepted harness version that has a complete benchmark run. */
 export function latestHarnessGroups(rows) {
   const families = Map.groupBy(rows, (row) => row.harnessFamily);
@@ -177,7 +223,7 @@ export function latestHarnessGroups(rows) {
             current == null || compareVersions(current, version) < 0 ? version : current,
           null,
         );
-      const group = aggregateGroupScore(members.filter((row) => row.harnessVersion === latest));
+      const group = aggregateFamilyScore(members.filter((row) => row.harnessVersion === latest));
       return [family, { ...group, harnessVersion: latest }];
     }),
   );
@@ -510,6 +556,7 @@ export async function buildDerivedDatasetFromAggregateState(
     formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
     repetitionUnit: "mean within user configuration × task",
     rollup: "equal configurations within task; equal tasks",
+    familyRollup: "median of complete configuration scores",
     source: "scripts/result-aggregation.mjs",
   };
   const leaderboardRows = aggregateLeaderboard(
@@ -527,20 +574,6 @@ export async function buildDerivedDatasetFromAggregateState(
   const taskFamilies = [
     ...new Set(evidence.trials.map((trial) => taskFamily(trial.taskId))),
   ].sort();
-  const groupScores = (rows) => {
-    const dimensions = ["modelFamily", "agentFamily", "harnessFamily", "thinking"];
-    return Object.fromEntries(
-      dimensions.map((dimension) => [
-        dimension,
-        Object.fromEntries(
-          [...Map.groupBy(rows, (row) => row[dimension])].map(([name, members]) => [
-            name,
-            aggregateGroupScore(members),
-          ]),
-        ),
-      ]),
-    );
-  };
   const familyRows = Object.fromEntries(
     taskFamilies.map((family) => [
       family,
@@ -561,11 +594,14 @@ export async function buildDerivedDatasetFromAggregateState(
     scoring,
     exclusions,
     leaderboard: leaderboardRows,
-    groups: groupScores(leaderboardRows),
+    groups: familyGroupScores(leaderboardRows),
     badges: { harnessFamily: badgeGroups },
     taskFamilies: familyRows,
     taskFamilyGroups: Object.fromEntries(
-      Object.entries(familyRows).map(([family, rows]) => [family, groupScores(rows)]),
+      Object.entries(familyRows).map(([family, rows]) => [
+        family,
+        familyGroupScores(rows, leaderboardRows, "qualityScore"),
+      ]),
     ),
     toolUsage: aggregateToolUsage(
       publicIndex,
@@ -769,6 +805,7 @@ export async function buildPublicDatasetFromStore(
       formula: "coverage * (0.75 * taskBalancedFirstExactRate + 0.25 * taskBalancedFinalExactRate)",
       repetitionUnit: "mean within user configuration × task",
       rollup: "equal configurations within task; equal tasks",
+      familyRollup: "median of complete configuration scores",
       source: "scripts/result-aggregation.mjs",
     },
     rows: serializeLeaderboard(
@@ -776,20 +813,6 @@ export async function buildPublicDatasetFromStore(
     ),
   };
   const taskFamilies = [...new Set(allTrials.map((trial) => taskFamily(trial.taskId)))].sort();
-  const groupScores = (rows) => {
-    const dimensions = ["modelFamily", "agentFamily", "harnessFamily", "thinking"];
-    return Object.fromEntries(
-      dimensions.map((dimension) => {
-        const groups = Map.groupBy(rows, (row) => row[dimension]);
-        return [
-          dimension,
-          Object.fromEntries(
-            [...groups].map(([name, members]) => [name, aggregateGroupScore(members)]),
-          ),
-        ];
-      }),
-    );
-  };
   const leaderboardRows = aggregateLeaderboard(publicIndex, allProfiles, allTrials, allRounds);
   const familyRows = Object.fromEntries(
     taskFamilies.map((family) => [
@@ -806,11 +829,14 @@ export async function buildPublicDatasetFromStore(
     scoring: leaderboard.scoring,
     exclusions,
     leaderboard: leaderboardRows,
-    groups: groupScores(leaderboardRows),
+    groups: familyGroupScores(leaderboardRows),
     badges: { harnessFamily: badgeGroups },
     taskFamilies: familyRows,
     taskFamilyGroups: Object.fromEntries(
-      Object.entries(familyRows).map(([family, rows]) => [family, groupScores(rows)]),
+      Object.entries(familyRows).map(([family, rows]) => [
+        family,
+        familyGroupScores(rows, leaderboardRows, "qualityScore"),
+      ]),
     ),
     toolUsage: aggregateToolUsage(publicIndex, allProfiles, allTrials, allRounds, allToolCalls),
   };
