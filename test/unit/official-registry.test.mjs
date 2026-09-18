@@ -69,6 +69,17 @@ test("official resolver selects a DeepSeek API key for a DeepSeek model", async 
     { deepseek: { type: "api_key", key: "secret" } },
   );
 });
+test("official resolver selects a Z.AI API key for a Z.AI model", async () => {
+  const plan = await resolveExecutionPlan(
+    { ...input, provider: "zai", model: "zai/glm-5.3-flash" },
+    { fetch: registry() },
+  );
+  assert.equal(plan.provider, "zai");
+  assert.equal(plan.model, "zai/glm-5.3-flash");
+  assert.deepEqual(selectOfficialCredential({ zai: { type: "api_key", key: "secret" } }, plan), {
+    zai: { type: "api_key", key: "secret" },
+  });
+});
 test("Pi Agent IDE resolves agent and extension as separate exact packages", async () => {
   const plan = await resolveExecutionPlan(
     { ...input, adapter: "pi-agent-ide", harnessVersion: "1.2.3" },

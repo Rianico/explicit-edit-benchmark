@@ -40,8 +40,12 @@ function adapterRecipe(id) {
         ? [{ role: "runtime", name: adapter.runtimePackage, versionInput: "runtimeVersion" }]
         : []),
     ],
-    providers: ["openai-codex", "deepseek"],
-    credentialSchemas: { "openai-codex": OAUTH_SCHEMA, deepseek: API_KEY_SCHEMA },
+    providers: ["openai-codex", "deepseek", "zai"],
+    credentialSchemas: {
+      "openai-codex": OAUTH_SCHEMA,
+      deepseek: API_KEY_SCHEMA,
+      zai: API_KEY_SCHEMA,
+    },
   };
 }
 
