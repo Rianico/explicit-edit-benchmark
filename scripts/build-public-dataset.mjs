@@ -164,14 +164,38 @@ function badgeColor(score) {
   return "red";
 }
 
-/** Aggregate every accepted version and run into one score per harness family. */
-export function harnessFamilyGroups(rows) {
+/** Score the highest accepted harness version that has a complete benchmark run. */
+export function latestHarnessGroups(rows) {
+  const families = Map.groupBy(rows, (row) => row.harnessFamily);
   return Object.fromEntries(
-    [...Map.groupBy(rows, (row) => row.harnessFamily)].map(([family, members]) => [
-      family,
-      aggregateGroupScore(members),
-    ]),
+    [...families].map(([family, members]) => {
+      const latest = members
+        .map((row) => row.harnessVersion)
+        .filter(Boolean)
+        .reduce(
+          (current, version) =>
+            current == null || compareVersions(current, version) < 0 ? version : current,
+          null,
+        );
+      const group = aggregateGroupScore(members.filter((row) => row.harnessVersion === latest));
+      return [family, { ...group, harnessVersion: latest }];
+    }),
   );
+}
+
+function compareVersions(left, right) {
+  const values = (version) =>
+    version.split(/[.-]/u).map((part) => (/^\d+$/u.test(part) ? Number(part) : part));
+  const a = values(left);
+  const b = values(right);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if (a[index] === b[index]) continue;
+    if (a[index] == null) return 1;
+    if (b[index] == null) return -1;
+    if (typeof a[index] === "number" && typeof b[index] === "number") return a[index] - b[index];
+    return String(a[index]).localeCompare(String(b[index]), undefined, { numeric: true });
+  }
+  return 0;
 }
 
 /** Keep complete benchmark runs for badges while leaving partial evidence in public views. */
@@ -220,9 +244,9 @@ function completeHarnessGroups(index, profiles, trials, rounds) {
     complete.trials,
     complete.rounds,
   );
-  const groups = harnessFamilyGroups(rows);
+  const groups = latestHarnessGroups(rows);
   for (const family of new Set(profiles.map((profile) => profile.harnessFamily))) {
-    groups[family] ??= { score: null };
+    groups[family] ??= { score: null, harnessVersion: null };
   }
   return groups;
 }

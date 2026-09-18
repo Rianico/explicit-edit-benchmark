@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { completeRunEvidence, harnessFamilyGroups } from "../../scripts/build-public-dataset.mjs";
+import { completeRunEvidence, latestHarnessGroups } from "../../scripts/build-public-dataset.mjs";
 
 function row(version, taskIds, passed) {
   return {
@@ -16,16 +16,17 @@ function row(version, taskIds, passed) {
   };
 }
 
-test("badge score aggregates every complete version in a harness family", () => {
+test("badge score uses the latest complete harness version", () => {
   const completeTasks = Array.from({ length: 226 }, (_, index) => `task-${index}`);
-  const groups = harnessFamilyGroups([
+  const groups = latestHarnessGroups([
     row("0.5.0", completeTasks, true),
     row("0.5.1", completeTasks, false),
   ]);
   const badge = groups["pi-agent-ide"];
+  assert.equal(badge.harnessVersion, "0.5.1");
   assert.equal(badge.coverage, 1);
   assert.equal(badge.taskCount, 226);
-  assert.equal(badge.score, 0.5);
+  assert.equal(badge.score, 0);
 });
 
 test("badge evidence excludes an incomplete run entirely", () => {
