@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { pinCallerTemplate } from "../../scripts/release-official-workflow.mjs";
 
@@ -16,4 +17,14 @@ test("one derived workflow SHA updates both caller pins", () => {
 
 test("release pinning fails when the caller template layout drifts", () => {
   assert.throws(() => pinCallerTemplate(`signer_sha: ${old}\n`, current, policy), /pin layout/);
+});
+
+test("ordinary users cannot invoke the maintainer release command", () => {
+  const result = spawnSync(process.execPath, ["scripts/release-official-workflow.mjs"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, OFFICIAL_RELEASE_AUTOMATION: "0" },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /only through the maintainer release workflow/);
 });

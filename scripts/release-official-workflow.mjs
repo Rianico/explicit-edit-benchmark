@@ -8,6 +8,7 @@ import { parseArgs } from "node:util";
 const SHA = /^[0-9a-f]{40}$/u;
 const WORKFLOW = ".github/workflows/official-run.yml";
 const POLICY = "policies/official-runs/v1.json";
+const RELEASE_REPOSITORY = "alexshpunt/explicit-edit-benchmark";
 
 function git(root, ...args) {
   return execFileSync("git", args, {
@@ -27,6 +28,16 @@ function commit(root, message, files) {
   git(root, "add", "--", ...files);
   git(root, "commit", "-m", message);
   return commitSha(root);
+}
+
+function requireMaintainerAutomation() {
+  if (
+    process.env.OFFICIAL_RELEASE_AUTOMATION !== "1" ||
+    process.env.GITHUB_ACTIONS !== "true" ||
+    process.env.GITHUB_REPOSITORY !== RELEASE_REPOSITORY ||
+    process.env.GITHUB_EVENT_NAME !== "workflow_dispatch"
+  )
+    throw Error("Official workflow releases run only through the maintainer release workflow");
 }
 
 function requireClean(root) {
@@ -57,14 +68,14 @@ export function pinCallerTemplate(text, workflowSha, policySha) {
 }
 
 /**
- * Read the committed workflow revision from Git, approve that same revision as signer and runner,
- * then update the caller template. Callers never type, copy, or complete a SHA by hand.
+ * Maintainer-only release transaction. It derives every pin from committed Git state.
  */
 export async function releaseOfficialWorkflow({
   root = process.cwd(),
   templateDirectory,
   callerDirectories = [],
 }) {
+  requireMaintainerAutomation();
   root = path.resolve(root);
   templateDirectory = path.resolve(templateDirectory);
   callerDirectories = callerDirectories.map((directory) => path.resolve(directory));
@@ -113,6 +124,7 @@ export async function releaseOfficialWorkflow({
 }
 
 async function main() {
+  requireMaintainerAutomation();
   const { values } = parseArgs({
     options: {
       "template-directory": { type: "string" },
