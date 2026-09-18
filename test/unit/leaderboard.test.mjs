@@ -8,6 +8,7 @@ import {
   describeDistribution,
   filterOptions,
   parseJsonLines,
+  providerFailureEligibility,
   taskFamily,
   toolTrialCounts,
 } from "../../scripts/result-aggregation.mjs";
@@ -602,6 +603,46 @@ await test("tool trial counts: counts one tool per trial, including trials that 
       calls: 0,
     },
   ]);
+});
+
+await test("leaderboard quarantines only a configuration with enough classified provider failures", () => {
+  const providerTrials = Array.from({ length: 50 }, (_, position) => ({
+    runId: "run-a",
+    trialId: `provider-${position}`,
+    taskId: position % 2 ? "replace-all-10-plain" : "language-replace-10-typescript-plain",
+    profileId: "profile-a",
+    rounds: 1,
+    firstExactPassed: position >= 10,
+    finalExactPassed: position >= 10,
+  }));
+  const providerRounds = providerTrials.map((trial, position) => ({
+    runId: "run-a",
+    trialId: trial.trialId,
+    providerFailure: position < 10 ? "rate-limit" : null,
+  }));
+
+  const [row] = aggregateLeaderboard(index, profiles, providerTrials, providerRounds);
+
+  assert.equal(row.rankingEligible, false);
+  assert.equal(row.rankingEligibilityReason, "provider-failure-rate");
+  assert.equal(row.providerFailureTrials, 10);
+  assert.equal(row.providerFailureRate, 0.2);
+});
+
+await test("provider failure quarantine starts at 20 percent and 50 trials", () => {
+  assert.deepEqual(providerFailureEligibility(49, 49), {
+    eligible: true,
+    reason: null,
+    providerFailureTrials: 49,
+    providerFailureRate: 1,
+  });
+  assert.equal(providerFailureEligibility(50, 9).eligible, true);
+  assert.deepEqual(providerFailureEligibility(50, 10), {
+    eligible: false,
+    reason: "provider-failure-rate",
+    providerFailureTrials: 10,
+    providerFailureRate: 0.2,
+  });
 });
 
 await test("aggregateFamilyScore: uses the median complete configuration score", () => {

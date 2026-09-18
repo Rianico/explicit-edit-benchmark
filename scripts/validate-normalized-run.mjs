@@ -52,6 +52,7 @@ const BASE_FIELDS = {
   ],
   "tool-calls.jsonl": ["roundId", "ordinal", "tool", "category", "outcome", "commandFeatures"],
 };
+const PROVIDER_FAILURES = new Set(["rate-limit"]);
 const SCHEMA_FIELDS = {
   ...BASE_FIELDS,
   "profiles.jsonl": [
@@ -171,14 +172,18 @@ export function rejectSensitiveText(content, label) {
     throw Error(`${label}: possible credential or machine-local path`);
 }
 
-function parseJsonLines(content, name) {
+function parseJsonLines(content, name, schemaVersion) {
   return content
     .split("\n")
     .filter(Boolean)
     .map((line, index) => {
       const label = `${name}:${index + 1}`;
       const row = object(JSON.parse(line), label);
-      exactKeys(row, SCHEMA_FIELDS[name], label);
+      const fields =
+        schemaVersion >= 2 && name === "rounds.jsonl"
+          ? [...SCHEMA_FIELDS[name], "providerFailure"]
+          : SCHEMA_FIELDS[name];
+      exactKeys(row, fields, label);
       return row;
     });
 }
@@ -273,6 +278,12 @@ function validateRow(name, row, index) {
     boolean(row, "exactPassed", label);
     boolean(row, "normalizedPassed", label);
     boolean(row, "timedOut", label);
+    if (
+      Object.hasOwn(row, "providerFailure") &&
+      row.providerFailure !== null &&
+      !PROVIDER_FAILURES.has(row.providerFailure)
+    )
+      throw Error(`${label}: invalid providerFailure`);
     boolean(row, "toolCallsObserved", label);
     if (!["pass", "eof", "other", "unknown"].includes(row.difference))
       throw Error(`${label}: invalid difference`);
@@ -383,8 +394,8 @@ function validateManifest(manifest) {
   exactKeys(manifest, manifestFields, "manifest");
   if (typeof manifest.runId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(manifest.runId))
     throw Error(`Invalid runId: ${manifest.runId}`);
-  if (manifest.schemaVersion !== 1)
-    throw Error(`Unsupported schemaVersion: ${manifest.schemaVersion}; expected 1`);
+  if (![1, 2].includes(manifest.schemaVersion))
+    throw Error(`Unsupported schemaVersion: ${manifest.schemaVersion}; expected 1 or 2`);
   if (manifest.sourceRuns !== undefined) {
     if (!Array.isArray(manifest.sourceRuns) || !manifest.sourceRuns.length)
       throw Error("manifest.sourceRuns: invalid value");
@@ -450,7 +461,7 @@ export async function validateNormalizedRun(directory) {
     const digest = createHash("sha256").update(content).digest("hex");
     if (expected.sha256 !== digest || expected.bytes !== Buffer.byteLength(content))
       throw Error(`${name}: digest or size mismatch`);
-    rows[name] = parseJsonLines(content, name);
+    rows[name] = parseJsonLines(content, name, manifest.schemaVersion);
     if (manifest.counts[countName] !== rows[name].length) throw Error(`${name}: count mismatch`);
     rows[name].forEach((row, index) => validateRow(name, row, index));
   }
