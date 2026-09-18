@@ -7,6 +7,7 @@ import { gzipSync } from "node:zlib";
 import { createAggregateState, materializeAggregateState } from "./aggregate-state.mjs";
 import { componentSources } from "./component-sources.mjs";
 import { validateNormalizedRun } from "./validate-normalized-run.mjs";
+import { canonicalModelProvider, loadModelRegistry } from "./model-registry.mjs";
 import { applyExclusions, exclusionPolicyRevision, loadExclusionRegistry } from "./exclusions.mjs";
 import {
   aggregateFamilyScore,
@@ -27,6 +28,34 @@ function withRunId(content, runId) {
       .map((line) => JSON.stringify({ runId, ...JSON.parse(line) }))
       .join("\n") + "\n"
   );
+}
+
+/** Canonicalize model providers in public projections and reconnect configuration hashes. */
+export function canonicalizeModelProviderRows(profiles, configurations, registry) {
+  const hashMap = new Map();
+  const canonicalConfigurations = configurations.map((configuration) => {
+    const provider = canonicalModelProvider(
+      registry,
+      configuration.modelFamily ?? configuration.model,
+      configuration.provider ?? null,
+    );
+    if (provider === configuration.provider) return configuration;
+    const previousHash = configuration.configurationHash;
+    const { configurationHash: _configurationHash, ...recipe } = { ...configuration, provider };
+    const configurationHash = createHash("sha256").update(JSON.stringify(recipe)).digest("hex");
+    hashMap.set(previousHash, configurationHash);
+    return { ...recipe, configurationHash };
+  });
+  const canonicalProfiles = profiles.map((profile) => ({
+    ...profile,
+    provider: canonicalModelProvider(
+      registry,
+      profile.modelFamily ?? profile.model,
+      profile.provider ?? null,
+    ),
+    configurationHash: hashMap.get(profile.configurationHash) ?? profile.configurationHash,
+  }));
+  return { profiles: canonicalProfiles, configurations: canonicalConfigurations };
 }
 
 /**
@@ -361,10 +390,29 @@ export async function buildPublicDataset(outputDirectory, bundleDirectories) {
     if (seen.has(manifest.runId)) throw Error(`Duplicate runId: ${manifest.runId}`);
     seen.add(manifest.runId);
     const manifestContent = await readFile(path.join(directory, "manifest.json"));
+    const modelRegistry = await loadModelRegistry();
+    const sources = Object.fromEntries(
+      await Promise.all(
+        TABLES.map(async (table) => [
+          table,
+          await readFile(path.join(directory, `${table}.jsonl`), "utf8"),
+        ]),
+      ),
+    );
+    const parse = (content) => content.split("\n").filter(Boolean).map(JSON.parse);
+    const canonical = canonicalizeModelProviderRows(
+      parse(sources.profiles),
+      parse(sources.configurations),
+      modelRegistry,
+    );
+    sources.profiles = canonical.profiles.map(JSON.stringify).join("\n") + "\n";
+    sources.configurations = canonical.configurations.map(JSON.stringify).join("\n") + "\n";
     const files = {};
     for (const table of TABLES) {
-      const source = await readFile(path.join(directory, `${table}.jsonl`), "utf8");
-      const compressed = gzipSync(withRunId(source, manifest.runId), { level: 6, mtime: 0 });
+      const compressed = gzipSync(withRunId(sources[table], manifest.runId), {
+        level: 6,
+        mtime: 0,
+      });
       const relative = path.join("data", table, `${manifest.runId}.jsonl.gz`);
       await mkdir(path.join(output, "data", table), { recursive: true });
       await writeFile(path.join(output, relative), compressed, { flag: "wx" });
@@ -551,6 +599,15 @@ export async function buildDerivedDatasetFromAggregateState(
   };
   const exclusionRegistry = await loadExclusionRegistry(exclusionRegistryFile);
   const restored = materializeAggregateState(aggregateState);
+  const modelRegistry = await loadModelRegistry();
+  restored.profiles = restored.profiles.map((profile) => ({
+    ...profile,
+    provider: canonicalModelProvider(
+      modelRegistry,
+      profile.modelFamily ?? profile.model,
+      profile.provider ?? null,
+    ),
+  }));
   const evidence = applyExclusions(exclusionRegistry, restored);
   const exclusions = {
     policyId: exclusionRegistry.policyId,
@@ -750,6 +807,15 @@ export async function buildPublicDatasetFromStore(
         .split("\n")
         .filter(Boolean)
         .map((line) => ({ runId: run.runId, ...JSON.parse(line) })),
+      configurations: (
+        await readFile(
+          path.join(store, "accepted", run.submissionId, "configurations.jsonl"),
+          "utf8",
+        )
+      )
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line)),
       trials: (
         await readFile(path.join(store, "accepted", run.submissionId, "trials.jsonl"), "utf8")
       )
@@ -770,6 +836,15 @@ export async function buildPublicDatasetFromStore(
         .map((line) => ({ runId: run.runId, ...JSON.parse(line) })),
     })),
   );
+  const modelRegistry = await loadModelRegistry();
+  for (const group of trialGroups) {
+    const canonical = canonicalizeModelProviderRows(
+      group.profiles,
+      group.configurations,
+      modelRegistry,
+    );
+    group.profiles = canonical.profiles;
+  }
   const rawEvidence = {
     trials: trialGroups.flatMap((group) => group.trials),
     rounds: trialGroups.flatMap((group) => group.rounds),

@@ -86,6 +86,9 @@ const bb = defineHarness({
   createAdapter({ model }) {
     const selectedModel = model.selectors?.bb;
     if (!selectedModel) throw Error("Model has no bb selector");
+    const modelRoute = selectedModel.includes("/")
+      ? selectedModel.slice(0, selectedModel.indexOf("/"))
+      : "direct";
     return {
       kind: "bb",
       // The sandbox runs the driver, so the driver has to travel with the state directory.
@@ -108,10 +111,10 @@ const bb = defineHarness({
       configurationLabels: [
         `harness/bb`,
         `provider/${provider}`,
-        ...(model.provider ? [`route/${model.provider}`] : []),
+        `route/${modelRoute}`,
         `server/${serverUrl ? "shared" : "per-trial"}`,
       ],
-      configurationId: `bb/${provider}/${model.provider ?? "direct"}/${serverUrl ? "shared-server" : "per-trial"}`,
+      configurationId: `bb/${provider}/${modelRoute}/${serverUrl ? "shared-server" : "per-trial"}`,
       configuration: {
         tools: [`bb@${harnessVersion}`],
         extensions: [],
@@ -156,7 +159,7 @@ export default defineBenchmarkConfig({
     gpt: {
       family: process.env.BB_MODEL_FAMILY ?? "gpt-5.6-luna",
       version: process.env.BB_MODEL_VERSION ?? "gpt-5.6-luna",
-      provider: process.env.BB_MODEL_PROVIDER ?? "openai-codex",
+      provider: process.env.BB_INFERENCE_PROVIDER ?? "openai-codex",
       thinking: process.env.BB_THINKING ?? "low",
       selectors: { bb: process.env.BB_MODEL ?? "" },
     },

@@ -8,6 +8,7 @@ import {
   resolveExecutionPlan,
   selectOfficialCredential,
 } from "../../scripts/execution-plan.mjs";
+import { canonicalModelProvider, loadModelRegistry } from "../../scripts/model-registry.mjs";
 
 const input = {
   adapter: "pi-default",
@@ -66,6 +67,21 @@ for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go"]) {
     );
   });
 }
+
+test("Luna repairs known provider aliases without hiding future providers", async () => {
+  const registry = await loadModelRegistry();
+
+  for (const recorded of ["agent-proxy", "openai", "openai-codex", null])
+    assert.equal(canonicalModelProvider(registry, "gpt-5.6-luna", recorded), "openai-codex");
+  assert.equal(
+    canonicalModelProvider(registry, "gpt-5.6-luna", "future-provider"),
+    "future-provider",
+  );
+  assert.equal(
+    canonicalModelProvider(registry, "deepseek-v4.1-flash", "opencode-go"),
+    "opencode-go",
+  );
+});
 
 test("provider selectors resolve to one versioned canonical model", async () => {
   const deepseek = await resolveExecutionPlan(
