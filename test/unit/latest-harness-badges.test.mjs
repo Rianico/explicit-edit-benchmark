@@ -1,20 +1,50 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { completeRunEvidence, latestHarnessGroups } from "../../scripts/build-public-dataset.mjs";
+import {
+  completeRunEvidence,
+  familyGroupScores,
+  latestHarnessGroups,
+} from "../../scripts/build-public-dataset.mjs";
 
 function row(version, taskIds, passed) {
   return {
     harnessFamily: "pi-agent-ide",
     harnessVersion: version,
     benchmarkTaskCount: 226,
-    trialSamples: taskIds.map((taskId) => ({
-      taskId,
-      firstExactPassed: passed,
-      finalExactPassed: passed,
-    })),
+    taskCount: taskIds.length,
+    complete: taskIds.length === 226,
+    coverage: taskIds.length / 226,
+    firstExactRate: Number(passed),
+    finalExactRate: Number(passed),
+    qualityScore: Number(passed),
+    score: Number(passed) * (taskIds.length / 226),
+    observations: taskIds.length,
   };
 }
+
+test("task-family groups use slices from globally complete configurations", () => {
+  const identity = {
+    modelFamily: "model",
+    agentFamily: "agent",
+    harnessFamily: "harness",
+    harnessVersion: "1.0.0",
+    thinking: "low",
+  };
+  const eligible = { ...identity, complete: true, score: 0.8 };
+  const taskFamilySlice = {
+    ...identity,
+    complete: false,
+    score: 0.6,
+    qualityScore: 0.75,
+    coverage: 0.8,
+  };
+
+  const groups = familyGroupScores([taskFamilySlice], [eligible], "qualityScore");
+
+  assert.equal(groups.harnessFamily.harness.score, 0.75);
+  assert.equal(groups.harnessFamily.harness.completeConfigurationCount, 1);
+});
 
 test("badge score uses the latest complete harness version", () => {
   const completeTasks = Array.from({ length: 226 }, (_, index) => `task-${index}`);

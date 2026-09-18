@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  aggregateGroupScore,
+  aggregateFamilyScore,
   aggregateLeaderboard,
   aggregateToolUsage,
   canonicalModelFamily,
@@ -604,92 +604,40 @@ await test("tool trial counts: counts one tool per trial, including trials that 
   ]);
 });
 
-const sample = (taskId, firstExactPassed, finalExactPassed = firstExactPassed) => ({
-  taskId,
-  firstExactPassed,
-  finalExactPassed,
-});
-// A configuration row as the leaderboard builds it, including the coverage
-// discount that makes averaging configuration scores misleading.
-const configuration = (trialSamples, benchmarkTaskCount = 4) => {
-  const rate = (pick) =>
-    trialSamples.reduce((total, item) => total + Number(pick(item)), 0) / trialSamples.length;
-  const quality =
-    0.75 * rate((item) => item.firstExactPassed) + 0.25 * rate((item) => item.finalExactPassed);
-  const tasks = new Set(trialSamples.map((item) => item.taskId)).size;
-  return {
-    trialSamples,
-    benchmarkTaskCount,
-    observations: trialSamples.length,
-    score: quality * (tasks / benchmarkTaskCount),
-  };
-};
-
-await test("aggregateGroupScore: adds a partial run as evidence instead of letting it drag the group down", () => {
-  const full = configuration([
-    sample("t1", true),
-    sample("t2", true),
-    sample("t3", false),
-    sample("t4", false),
-  ]);
-  const partial = configuration([sample("t1", true)]);
-
-  const group = aggregateGroupScore([full, partial]);
-
-  // Scores would average the coverage discount in: (0.5 + 0.25) / 2 = 0.375.
-  assert.ok((0.5 + 0.25) / 2 < 0.5);
-  assert.equal(group.taskCount, 4);
-  assert.equal(group.coverage, 1);
-  assertCloseTo(group.qualityScore, 0.5, 10);
-  assertCloseTo(group.score, 0.5, 10);
-});
-
-await test("aggregateGroupScore: gives each configuration equal weight inside a task", () => {
-  const repeatedPasses = configuration([
-    sample("t1", true),
-    sample("t1", true),
-    sample("t1", true),
-    sample("t1", true),
-  ]);
-  const oneFailure = configuration([sample("t1", false)]);
-
-  const group = aggregateGroupScore([repeatedPasses, oneFailure]);
-
-  assert.equal(group.observations, 5);
-  assert.equal(group.firstExactRate, 0.5);
-  assert.equal(group.finalExactRate, 0.5);
-  assert.equal(group.qualityScore, 0.5);
-});
-
-await test("aggregateGroupScore: is invariant to row order", () => {
+await test("aggregateFamilyScore: uses the median complete configuration score", () => {
   const rows = [
-    configuration([sample("t1", true), sample("t2", false)]),
-    configuration([sample("t1", false, true)]),
+    { complete: true, score: 0.91, qualityScore: 0.91, coverage: 1 },
+    { complete: true, score: 0.89, qualityScore: 0.89, coverage: 1 },
+    { complete: true, score: 0.87, qualityScore: 0.87, coverage: 1 },
+    { complete: true, score: 0.2, qualityScore: 0.2, coverage: 1 },
   ];
 
-  assert.deepEqual(aggregateGroupScore(rows), aggregateGroupScore(rows.toReversed()));
+  const group = aggregateFamilyScore(rows);
+
+  assert.equal(group.score, 0.88);
+  assert.equal(group.configurationCount, 4);
+  assert.equal(group.completeConfigurationCount, 4);
+  assert.equal(group.scoreDistribution.mean, 0.7175);
 });
 
-await test("aggregateGroupScore: scores a group with little evidence low instead of complete", () => {
-  const group = aggregateGroupScore([configuration([sample("t1", true)])]);
-
-  assert.equal(group.taskCount, 1);
-  assert.equal(group.coverage, 0.25);
-  assert.equal(group.qualityScore, 1);
-  assertCloseTo(group.score, 0.25, 10);
-});
-
-await test("aggregateGroupScore: counts one task once however many configurations ran it", () => {
-  const group = aggregateGroupScore([
-    configuration([sample("t1", true), sample("t2", true)]),
-    configuration([sample("t1", false, true), sample("t2", true)]),
+await test("aggregateFamilyScore: has no headline without a complete configuration", () => {
+  const group = aggregateFamilyScore([
+    { complete: false, score: 0.01, qualityScore: 1, coverage: 0.01 },
   ]);
 
-  assert.equal(group.taskCount, 2);
-  assert.equal(group.observations, 4);
-  assert.equal(group.coverage, 0.5);
-  // t1 recovers on the second round, so the final rate is higher than first.
-  assertCloseTo(group.firstExactRate, 0.75, 10);
-  assert.equal(group.finalExactRate, 1);
-  assertCloseTo(group.qualityScore, 0.75 * 0.75 + 0.25, 10);
+  assert.equal(group.score, null);
+  assert.equal(group.scoreDistribution, null);
+  assert.equal(group.completeConfigurationCount, 0);
+});
+
+await test("aggregateFamilyScore: excludes partial configurations from its score", () => {
+  const group = aggregateFamilyScore([
+    { complete: true, score: 0.8, qualityScore: 0.8, coverage: 1 },
+    { complete: false, score: 0.01, qualityScore: 1, coverage: 0.01 },
+  ]);
+
+  assert.equal(group.score, 0.8);
+  assert.equal(group.configurationCount, 2);
+  assert.equal(group.completeConfigurationCount, 1);
+  assert.equal(group.scoreDistribution.count, 1);
 });

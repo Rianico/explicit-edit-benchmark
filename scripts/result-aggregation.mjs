@@ -209,6 +209,30 @@ export function describeDistribution(values) {
 function mean(values) {
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
 }
+
+/**
+ * Describe a family by the median of its complete configuration rows.
+ * Partial configurations remain counted but cannot lower the published family score.
+ * `scoreField` selects the configuration metric used for the headline and distribution.
+ */
+export function aggregateFamilyScore(rows, scoreField = "score") {
+  const completeRows = rows.filter((row) => row.complete === true);
+  const median = (field) =>
+    describeDistribution(completeRows.map((row) => row[field]))?.median ?? null;
+  return {
+    firstExactRate: median("firstExactRate"),
+    finalExactRate: median("finalExactRate"),
+    qualityScore: median("qualityScore"),
+    coverage: median("coverage"),
+    score: median(scoreField),
+    scoreDistribution: describeDistribution(completeRows.map((row) => row[scoreField])),
+    taskCount: Math.max(0, ...completeRows.map((row) => row.taskCount ?? 0)),
+    benchmarkTaskCount: Math.max(0, ...completeRows.map((row) => row.benchmarkTaskCount ?? 0)),
+    observations: completeRows.reduce((total, row) => total + (row.observations ?? 0), 0),
+    configurationCount: rows.length,
+    completeConfigurationCount: completeRows.length,
+  };
+}
 function configurationTaskCells(samples) {
   const tasks = new Map();
   for (const sample of samples) {
@@ -229,49 +253,6 @@ function configurationTaskCells(samples) {
     firstExactRate: task.firstPasses / task.observations,
     finalExactRate: task.finalPasses / task.observations,
   }));
-}
-
-/**
- * Score configurations that share one visible identity.
- *
- * Repetitions first estimate one configuration × task cell. Configurations then
- * have equal weight inside each task, and tasks have equal weight in the group.
- * Coverage remains separate, so partial evidence stays useful without looking
- * complete or gaining weight merely because it was submitted more often.
- */
-export function aggregateGroupScore(rows) {
-  const tasks = new Map();
-  let observations = 0;
-  for (const row of rows) {
-    const cells = row.configurationTaskCells ?? configurationTaskCells(row.trialSamples ?? []);
-    for (const cell of cells) {
-      const task = tasks.get(cell.taskId) ?? { firstRates: [], finalRates: [] };
-      task.firstRates.push(cell.firstExactRate);
-      task.finalRates.push(cell.finalExactRate);
-      tasks.set(cell.taskId, task);
-    }
-    observations += row.observations ?? (row.trialSamples ?? []).length;
-  }
-  const perTask = [...tasks.values()];
-  const firstExactRate = mean(perTask.map((task) => mean(task.firstRates)));
-  const finalExactRate = mean(perTask.map((task) => mean(task.finalRates)));
-  const qualityScore =
-    firstExactRate == null || finalExactRate == null
-      ? null
-      : 0.75 * firstExactRate + 0.25 * finalExactRate;
-  // The benchmark size, not the sum per configuration: one task counts once.
-  const benchmarkTaskCount = Math.max(0, ...rows.map((row) => row.benchmarkTaskCount ?? 0));
-  const coverage = benchmarkTaskCount ? tasks.size / benchmarkTaskCount : null;
-  return {
-    firstExactRate,
-    finalExactRate,
-    qualityScore,
-    coverage,
-    score: qualityScore == null || coverage == null ? null : qualityScore * coverage,
-    taskCount: tasks.size,
-    benchmarkTaskCount,
-    observations,
-  };
 }
 
 /**
