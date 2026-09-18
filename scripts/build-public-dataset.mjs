@@ -527,6 +527,12 @@ export async function buildDerivedDatasetFromAggregateState(
       }),
     ]),
   );
+  const badgeGroups = completeHarnessGroups(
+    publicIndex,
+    evidence.profiles,
+    evidence.trials,
+    evidence.rounds,
+  );
   const views = {
     schemaVersion: 1,
     sources: componentSources(leaderboardRows.map((row) => row.harnessFamily)),
@@ -534,6 +540,7 @@ export async function buildDerivedDatasetFromAggregateState(
     exclusions,
     leaderboard: leaderboardRows,
     groups: groupScores(leaderboardRows),
+    badges: { harnessFamily: badgeGroups },
     taskFamilies: familyRows,
     taskFamilyGroups: Object.fromEntries(
       Object.entries(familyRows).map(([family, rows]) => [family, groupScores(rows)]),
@@ -555,10 +562,7 @@ export async function buildDerivedDatasetFromAggregateState(
   const viewsContent = JSON.stringify(views) + "\n";
   await writeFile(path.join(outputDirectory, "views.json"), viewsContent);
   index.views = fileRecord("views.json", viewsContent);
-  const badges = await writeHarnessBadges(
-    outputDirectory,
-    completeHarnessGroups(publicIndex, evidence.profiles, evidence.trials, evidence.rounds),
-  );
+  const badges = await writeHarnessBadges(outputDirectory, badgeGroups);
   if (badges) index.badges = badges;
   const leaderboardContent = JSON.stringify(leaderboard, null, 2) + "\n";
   await writeFile(path.join(outputDirectory, "leaderboard.json"), leaderboardContent);
@@ -773,6 +777,7 @@ export async function buildPublicDatasetFromStore(
       }),
     ]),
   );
+  const badgeGroups = completeHarnessGroups(publicIndex, allProfiles, allTrials, allRounds);
   const views = {
     schemaVersion: 1,
     sources: componentSources(leaderboardRows.map((row) => row.harnessFamily)),
@@ -780,6 +785,7 @@ export async function buildPublicDatasetFromStore(
     exclusions,
     leaderboard: leaderboardRows,
     groups: groupScores(leaderboardRows),
+    badges: { harnessFamily: badgeGroups },
     taskFamilies: familyRows,
     taskFamilyGroups: Object.fromEntries(
       Object.entries(familyRows).map(([family, rows]) => [family, groupScores(rows)]),
@@ -803,10 +809,7 @@ export async function buildPublicDatasetFromStore(
     bytes: Buffer.byteLength(viewsContent),
     sha256: createHash("sha256").update(viewsContent).digest("hex"),
   };
-  const badges = await writeHarnessBadges(
-    outputDirectory,
-    completeHarnessGroups(publicIndex, allProfiles, allTrials, allRounds),
-  );
+  const badges = await writeHarnessBadges(outputDirectory, badgeGroups);
   if (badges) index.badges = badges;
   const leaderboardContent = JSON.stringify(leaderboard, null, 2) + "\n";
   await writeFile(path.join(outputDirectory, "leaderboard.json"), leaderboardContent);
