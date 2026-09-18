@@ -60,11 +60,17 @@ export function pinCallerTemplate(text, workflowSha, policySha) {
  * Read the committed workflow revision from Git, approve that same revision as signer and runner,
  * then update the caller template. Callers never type, copy, or complete a SHA by hand.
  */
-export async function releaseOfficialWorkflow({ root = process.cwd(), templateDirectory }) {
+export async function releaseOfficialWorkflow({
+  root = process.cwd(),
+  templateDirectory,
+  callerDirectories = [],
+}) {
   root = path.resolve(root);
   templateDirectory = path.resolve(templateDirectory);
+  callerDirectories = callerDirectories.map((directory) => path.resolve(directory));
   requireClean(root);
   requireClean(templateDirectory);
+  for (const directory of callerDirectories) requireClean(directory);
   if (git(root, "branch", "--show-current") === "main")
     throw Error("Create a release branch before updating official workflow pins");
 
@@ -93,14 +99,34 @@ export async function releaseOfficialWorkflow({ root = process.cwd(), templateDi
     WORKFLOW,
   ]);
 
-  return { workflowSha: runnerSha, policySha, templateSha };
+  const callerShas = [];
+  for (const directory of callerDirectories) {
+    const callerFile = path.join(directory, WORKFLOW);
+    await writeFile(
+      callerFile,
+      pinCallerTemplate(await readFile(callerFile, "utf8"), runnerSha, policySha),
+    );
+    callerShas.push(commit(directory, "Pin official benchmark workflow release", [WORKFLOW]));
+  }
+
+  return { workflowSha: runnerSha, policySha, templateSha, callerShas };
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { "template-directory": { type: "string" } } });
+  const { values } = parseArgs({
+    options: {
+      "template-directory": { type: "string" },
+      "caller-directory": { type: "string", multiple: true, default: [] },
+    },
+  });
   if (!values["template-directory"])
-    throw Error("Usage: release-official-workflow --template-directory PATH");
-  const result = await releaseOfficialWorkflow({ templateDirectory: values["template-directory"] });
+    throw Error(
+      "Usage: release-official-workflow --template-directory PATH [--caller-directory PATH ...]",
+    );
+  const result = await releaseOfficialWorkflow({
+    templateDirectory: values["template-directory"],
+    callerDirectories: values["caller-directory"],
+  });
   console.log(JSON.stringify(result, null, 2));
 }
 
