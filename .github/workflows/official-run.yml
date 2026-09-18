@@ -46,6 +46,10 @@ name: Official benchmark run
         required: false
         default: openai-codex
         type: string
+      policy_sha:
+        description: Commit containing the approved release policy and verifier
+        required: true
+        type: string
     secrets:
       pi_auth_json:
         description: Pi auth.json used only by the measured process
@@ -326,7 +330,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           repository: alexshpunt/explicit-edit-benchmark
-          ref: ${{ needs.resolve.outputs.sha }}
+          ref: ${{ inputs.policy_sha }}
           persist-credentials: false
 
       - name: Setup Node
