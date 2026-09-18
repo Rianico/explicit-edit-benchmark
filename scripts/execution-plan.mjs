@@ -26,7 +26,6 @@ const PROVIDER_CREDENTIAL_SCHEMAS = {
   zai: API_KEY_SCHEMA,
   xiaomi: API_KEY_SCHEMA,
   "opencode-go": API_KEY_SCHEMA,
-  typesafe: API_KEY_SCHEMA,
 };
 
 /** Resolve package evidence for the canonical adapter selected by either transport. */
