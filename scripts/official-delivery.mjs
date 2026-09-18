@@ -55,7 +55,10 @@ export async function withDeliveryRetry(operation, options = {}) {
   throw Error("delivery retry loop ended unexpectedly");
 }
 
-/** Wait until main contains the acceptance record for the exact delivered candidate bytes. */
+/**
+ * Wait until main contains the acceptance record for the exact delivered candidate bytes.
+ * `onWait` receives the completed poll number and delay before each retry.
+ */
 export async function waitForOfficialAcceptance({
   repository,
   delivery,
@@ -63,6 +66,7 @@ export async function waitForOfficialAcceptance({
   attempts = 60,
   delayMs = 10_000,
   sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  onWait = () => {},
   fetchImpl = fetch,
 }) {
   if (!REPOSITORY.test(repository ?? "")) throw Error("Dataset repository must be owner/name");
@@ -73,7 +77,10 @@ export async function waitForOfficialAcceptance({
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const response = await fetchImpl(url, { headers: authorization(token), redirect: "follow" });
     if (response.status === 404) {
-      if (attempt < attempts) await sleep(delayMs);
+      if (attempt < attempts) {
+        onWait({ attempt, attempts, delayMs });
+        await sleep(delayMs);
+      }
       continue;
     }
     if (!response.ok) {
@@ -82,6 +89,7 @@ export async function waitForOfficialAcceptance({
       });
       if (!retryable(error)) throw error;
       if (attempt < attempts) {
+        onWait({ attempt, attempts, delayMs });
         await sleep(delayMs);
         continue;
       }

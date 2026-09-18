@@ -114,12 +114,14 @@ test("recovery waits for the exact acceptance receipt and closes with the contri
     signerWorkflowSha: "d".repeat(40),
   };
   let polls = 0;
+  const progress = [];
   const receipt = await waitForOfficialAcceptance({
     repository: "owner/dataset",
     delivery: status,
     accessToken: "contributor-token",
     attempts: 2,
     sleep: async () => {},
+    onWait: (event) => progress.push(event),
     fetchImpl: async () => {
       polls += 1;
       if (polls === 1) return { ok: false, status: 404 };
@@ -138,6 +140,7 @@ test("recovery waits for the exact acceptance receipt and closes with the contri
     },
   });
   assert.equal(receipt.datasetCommit, "e".repeat(40));
+  assert.deepEqual(progress, [{ attempt: 1, attempts: 2, delayMs: 10_000 }]);
 
   const requests = [];
   const closed = await closeAcceptedOfficialCandidate({

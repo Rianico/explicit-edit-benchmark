@@ -35,6 +35,10 @@ if (args.includes("--wait-for-acceptance") && status.status === "delivered")
     wait: {
       attempts: Number(process.env.ACCEPTANCE_POLL_ATTEMPTS ?? 120),
       delayMs: Number(process.env.ACCEPTANCE_POLL_DELAY_MS ?? 10_000),
+      onWait: ({ attempt, attempts, delayMs }) =>
+        console.error(
+          `Waiting for acceptance (attempt ${attempt}/${attempts}); checking again in ${delayMs / 1_000}s.`,
+        ),
     },
   });
 console.log(JSON.stringify(status));
