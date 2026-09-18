@@ -46,7 +46,7 @@ test("official resolver emits an exact declarative Pi plan", async () => {
   assert.equal(Object.hasOwn(plan, "command"), false);
   assert.equal(Object.hasOwn(plan, "credentials"), false);
 });
-for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go", "typesafe"]) {
+for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go"]) {
   test(`official resolver selects only the ${provider} API key`, async () => {
     const plan = await resolveExecutionPlan(
       { ...input, provider, model: `${provider}/model` },
@@ -67,6 +67,15 @@ for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go", "typesafe"])
   });
 }
 
+test("an unrelated stored credential is not an official provider", async () => {
+  await assert.rejects(
+    resolveExecutionPlan(
+      { ...input, provider: "typesafe", model: "typesafe/model" },
+      { fetch: registry() },
+    ),
+    /Unsupported provider/,
+  );
+});
 test("Pi Agent IDE resolves agent and extension as separate exact packages", async () => {
   const plan = await resolveExecutionPlan(
     { ...input, adapter: "pi-agent-ide", harnessVersion: "1.2.3" },
