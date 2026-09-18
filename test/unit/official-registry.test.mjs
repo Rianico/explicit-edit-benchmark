@@ -46,6 +46,29 @@ test("official resolver emits an exact declarative Pi plan", async () => {
   assert.equal(Object.hasOwn(plan, "command"), false);
   assert.equal(Object.hasOwn(plan, "credentials"), false);
 });
+test("official resolver selects a DeepSeek API key for a DeepSeek model", async () => {
+  const plan = await resolveExecutionPlan(
+    {
+      ...input,
+      provider: "deepseek",
+      model: "deepseek/deepseek-flash",
+    },
+    { fetch: registry() },
+  );
+  assert.equal(plan.provider, "deepseek");
+  assert.equal(plan.model, "deepseek/deepseek-flash");
+  assert.deepEqual(plan.credential.fields, ["type", "key"]);
+  assert.deepEqual(
+    selectOfficialCredential(
+      {
+        deepseek: { type: "api_key", key: "secret" },
+        "openai-codex": { type: "oauth", access: "ignored" },
+      },
+      plan,
+    ),
+    { deepseek: { type: "api_key", key: "secret" } },
+  );
+});
 test("Pi Agent IDE resolves agent and extension as separate exact packages", async () => {
   const plan = await resolveExecutionPlan(
     { ...input, adapter: "pi-agent-ide", harnessVersion: "1.2.3" },
