@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { canonicalIdentityJson } from "./official-identities.mjs";
 import { adapterDefinition } from "./adapter-registry.mjs";
+import { resolveCanonicalModel } from "./model-registry.mjs";
 
 const EXACT_VERSION = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 const MODEL = /^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._:-]*$/;
@@ -122,6 +123,8 @@ async function npmPackage(name, version, fetchImpl) {
 export async function resolveExecutionPlan(input, options = {}) {
   const adapter = validateInput(input);
   const fetchImpl = options.fetch ?? fetch;
+  const selector = input.model.slice(input.model.indexOf("/") + 1);
+  const modelIdentity = await resolveCanonicalModel(input.provider, selector);
   const packages = [];
   for (const recipe of adapter.packages) {
     const resolved = await npmPackage(recipe.name, input[recipe.versionInput], fetchImpl);
@@ -133,6 +136,7 @@ export async function resolveExecutionPlan(input, options = {}) {
     harnessFamily: adapter.harnessFamily,
     provider: input.provider,
     model: input.model,
+    ...modelIdentity,
     reasoning: input.reasoning,
     packages,
   };

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { resolveCanonicalModel } from "./model-registry.mjs";
 import { ADAPTERS, ADAPTER_BINARIES, ADAPTER_IDS } from "./adapter-registry.mjs";
 export { ADAPTERS, ADAPTER_BINARIES, ADAPTER_IDS } from "./adapter-registry.mjs";
 
@@ -228,7 +229,15 @@ function ompSettings(provider, model, thinking, env) {
       ) + "\n",
   };
 }
-function canonicalIdentity({ harness, model, thinking, version, provider, harnessVersion }) {
+function canonicalIdentity({
+  harness,
+  model,
+  canonicalModel,
+  thinking,
+  version,
+  provider,
+  harnessVersion,
+}) {
   const agentFamily = ADAPTERS[harness]?.agentFamily;
   if (!agentFamily)
     throw Error(`Unsupported adapter: ${harness}. Use one of: ${ADAPTER_IDS.join(", ")}`);
@@ -239,8 +248,8 @@ function canonicalIdentity({ harness, model, thinking, version, provider, harnes
     agentFamily,
     harnessFamily: harness,
     agentVersion: exactVersion,
-    modelFamily: model.includes("/") ? model.slice(model.indexOf("/") + 1) : model,
-    modelVersion: model.includes("/") ? model.slice(model.indexOf("/") + 1) : model,
+    modelFamily: canonicalModel,
+    modelVersion: canonicalModel,
     provider: provider?.id ?? (model.includes("/") ? model.slice(0, model.indexOf("/")) : null),
     harnessVersion: harnessVersion ?? exactVersion,
     adapterVersion: "1",
@@ -610,6 +619,13 @@ async function main() {
         `IDE package version ${installed.version} does not match --harness-version ${values["harness-version"]}`,
       );
   }
+  const providerId =
+    provider?.id ??
+    (values.model.includes("/") ? values.model.slice(0, values.model.indexOf("/")) : "unknown");
+  const selector = values.model.includes("/")
+    ? values.model.slice(values.model.indexOf("/") + 1)
+    : values.model;
+  const { canonicalModel } = await resolveCanonicalModel(providerId, selector);
   const runtimeAdapter = makeAdapter({
     harness: values.harness,
     model: values.model,
@@ -628,6 +644,7 @@ async function main() {
     ...canonicalIdentity({
       harness: values.harness,
       model: values.model,
+      canonicalModel: canonicalModel.id,
       thinking: values.thinking,
       version: runtimeAdapter.version,
       provider,

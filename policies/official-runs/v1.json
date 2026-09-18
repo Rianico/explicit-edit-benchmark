@@ -107,6 +107,10 @@
   "benchmark": {
     "repository": "alexshpunt/explicit-edit-benchmark"
   },
+  "modelRegistry": {
+    "id": "benchmark-models-v1",
+    "sha256": "1cc7062727e23d1d5b7aa45328e2ba8da2c31f7072fdee4bdce3be64311ab960"
+  },
   "runner": {
     "contract": "explicit-edit-v1",
     "taskSetSha256": "2c0c975ca7ab2398eef54cadbe68ca20fec8082121ee63d6045c91b9cde2faff",

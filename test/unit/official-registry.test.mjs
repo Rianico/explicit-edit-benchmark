@@ -67,6 +67,33 @@ for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go"]) {
   });
 }
 
+test("provider selectors resolve to one versioned canonical model", async () => {
+  const deepseek = await resolveExecutionPlan(
+    { ...input, provider: "deepseek", model: "deepseek/deepseek-flash" },
+    { fetch: registry() },
+  );
+  const opencode = await resolveExecutionPlan(
+    {
+      ...input,
+      provider: "opencode-go",
+      model: "opencode-go/deepseek-v4.1-flash",
+    },
+    { fetch: registry() },
+  );
+
+  assert.equal(deepseek.canonicalModel.id, "deepseek-v4.1-flash");
+  assert.equal(opencode.canonicalModel.id, "deepseek-v4.1-flash");
+  assert.equal(deepseek.model, "deepseek/deepseek-flash");
+  assert.equal(opencode.model, "opencode-go/deepseek-v4.1-flash");
+  assert.equal(deepseek.modelRegistry.id, "benchmark-models-v1");
+  assert.match(deepseek.modelRegistry.sha256, /^[0-9a-f]{64}$/u);
+});
+
+test("an unaliased selector keeps its exact model name", async () => {
+  const plan = await resolveExecutionPlan(input, { fetch: registry() });
+  assert.equal(plan.canonicalModel.id, "gpt-5.6-luna");
+  assert.equal(plan.canonicalModel.displayName, "gpt-5.6-luna");
+});
 test("an unrelated stored credential is not an official provider", async () => {
   await assert.rejects(
     resolveExecutionPlan(

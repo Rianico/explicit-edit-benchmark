@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "registryId": "benchmark-models-v1",
+  "models": [
+    {
+      "id": "deepseek-v4.1-flash",
+      "displayName": "DeepSeek V4.1 Flash",
+      "sourceUrl": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "routes": [
+        {
+          "provider": "deepseek",
+          "selector": "deepseek-flash"
+        },
+        {
+          "provider": "opencode-go",
+          "selector": "deepseek-v4.1-flash"
+        }
+      ]
+    }
+  ]
+}

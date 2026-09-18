@@ -26,6 +26,7 @@ export async function loadOfficialPolicy(file) {
       "workflows",
       "runner",
       "benchmark",
+      "modelRegistry",
       "normalizedSchemas",
       "runPolicy",
       "fullRunPolicy",
@@ -57,6 +58,13 @@ export async function loadOfficialPolicy(file) {
   exactKeys(policy.benchmark, ["repository"], "policy.benchmark");
   if (policy.benchmark.repository !== "alexshpunt/explicit-edit-benchmark")
     throw Error("policy.benchmark: unsupported repository");
+  exactKeys(policy.modelRegistry, ["id", "sha256"], "policy.modelRegistry");
+  if (
+    typeof policy.modelRegistry.id !== "string" ||
+    !policy.modelRegistry.id ||
+    !SHA256.test(policy.modelRegistry.sha256)
+  )
+    throw Error("policy.modelRegistry: invalid identity");
   exactKeys(
     policy.runner,
     ["contract", "taskSetSha256", "verifierSha256", "tasks"],
