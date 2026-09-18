@@ -20,6 +20,15 @@ const API_KEY_SCHEMA = {
   type: "api_key",
 };
 
+const PROVIDER_CREDENTIAL_SCHEMAS = {
+  "openai-codex": OAUTH_SCHEMA,
+  deepseek: API_KEY_SCHEMA,
+  zai: API_KEY_SCHEMA,
+  xiaomi: API_KEY_SCHEMA,
+  "opencode-go": API_KEY_SCHEMA,
+  typesafe: API_KEY_SCHEMA,
+};
+
 /** Resolve package evidence for the canonical adapter selected by either transport. */
 function adapterRecipe(id) {
   let adapter;
@@ -40,12 +49,8 @@ function adapterRecipe(id) {
         ? [{ role: "runtime", name: adapter.runtimePackage, versionInput: "runtimeVersion" }]
         : []),
     ],
-    providers: ["openai-codex", "deepseek", "zai"],
-    credentialSchemas: {
-      "openai-codex": OAUTH_SCHEMA,
-      deepseek: API_KEY_SCHEMA,
-      zai: API_KEY_SCHEMA,
-    },
+    providers: Object.keys(PROVIDER_CREDENTIAL_SCHEMAS),
+    credentialSchemas: PROVIDER_CREDENTIAL_SCHEMAS,
   };
 }
 

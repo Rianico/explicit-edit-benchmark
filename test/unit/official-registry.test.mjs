@@ -46,40 +46,27 @@ test("official resolver emits an exact declarative Pi plan", async () => {
   assert.equal(Object.hasOwn(plan, "command"), false);
   assert.equal(Object.hasOwn(plan, "credentials"), false);
 });
-test("official resolver selects a DeepSeek API key for a DeepSeek model", async () => {
-  const plan = await resolveExecutionPlan(
-    {
-      ...input,
-      provider: "deepseek",
-      model: "deepseek/deepseek-flash",
-    },
-    { fetch: registry() },
-  );
-  assert.equal(plan.provider, "deepseek");
-  assert.equal(plan.model, "deepseek/deepseek-flash");
-  assert.deepEqual(plan.credential.fields, ["type", "key"]);
-  assert.deepEqual(
-    selectOfficialCredential(
-      {
-        deepseek: { type: "api_key", key: "secret" },
-        "openai-codex": { type: "oauth", access: "ignored" },
-      },
-      plan,
-    ),
-    { deepseek: { type: "api_key", key: "secret" } },
-  );
-});
-test("official resolver selects a Z.AI API key for a Z.AI model", async () => {
-  const plan = await resolveExecutionPlan(
-    { ...input, provider: "zai", model: "zai/glm-5.3-flash" },
-    { fetch: registry() },
-  );
-  assert.equal(plan.provider, "zai");
-  assert.equal(plan.model, "zai/glm-5.3-flash");
-  assert.deepEqual(selectOfficialCredential({ zai: { type: "api_key", key: "secret" } }, plan), {
-    zai: { type: "api_key", key: "secret" },
+for (const provider of ["deepseek", "zai", "xiaomi", "opencode-go", "typesafe"]) {
+  test(`official resolver selects only the ${provider} API key`, async () => {
+    const plan = await resolveExecutionPlan(
+      { ...input, provider, model: `${provider}/model` },
+      { fetch: registry() },
+    );
+    assert.equal(plan.provider, provider);
+    assert.deepEqual(plan.credential.fields, ["type", "key"]);
+    assert.deepEqual(
+      selectOfficialCredential(
+        {
+          [provider]: { type: "api_key", key: "secret" },
+          another: { type: "api_key", key: "ignored" },
+        },
+        plan,
+      ),
+      { [provider]: { type: "api_key", key: "secret" } },
+    );
   });
-});
+}
+
 test("Pi Agent IDE resolves agent and extension as separate exact packages", async () => {
   const plan = await resolveExecutionPlan(
     { ...input, adapter: "pi-agent-ide", harnessVersion: "1.2.3" },
