@@ -165,6 +165,16 @@ export async function extractOfficialArchive(archive, outputDirectory) {
   return { root, files: [...entries.keys()].sort() };
 }
 
+/** Bind the attested execution plan to the model registry approved by release policy. */
+export function validateExecutionPlanModelRegistry(plan, policy) {
+  if (
+    plan?.modelRegistry?.id !== policy.modelRegistry.id ||
+    plan?.modelRegistry?.sha256 !== policy.modelRegistry.sha256 ||
+    typeof plan?.canonicalModel?.id !== "string" ||
+    !plan.canonicalModel.id
+  )
+    reject("invalid-contract", "official execution plan: model registry does not match policy");
+}
 /** Verify the signed transport metadata and trusted manifest after attestation verification. */
 export async function verifyOfficialCandidate({
   candidateDirectory,
@@ -205,6 +215,10 @@ export async function verifyOfficialCandidate({
     policyFile,
     signerSha,
   );
+  const plan = JSON.parse(
+    await readFile(path.join(extractedDirectory, "execution-plan.json"), "utf8"),
+  );
+  validateExecutionPlanModelRegistry(plan, validated.policy);
   if (validated.manifest.executionIdentity.executionId !== transport.executionId)
     reject("conflicting-identity", "official transport: execution identity mismatch");
   return { artifact, attestation, transport, artifactSha256, ...validated };
