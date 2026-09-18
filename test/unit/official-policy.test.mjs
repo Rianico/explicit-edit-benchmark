@@ -8,6 +8,7 @@ import {
   loadOfficialPolicy,
   runPolicyForLifecycle,
 } from "../../scripts/official-policy.mjs";
+import { NORMALIZED_SCHEMA_VERSION } from "../../scripts/normalized-run.mjs";
 
 const policyFile = new URL("../../policies/official-runs/v1.json", import.meta.url);
 
@@ -38,6 +39,10 @@ test("full and partial measurements use their exact approved run policies", asyn
   assert.equal(policy.fullRunPolicy.concurrency, 10);
 });
 
+test("release policy allows the schema produced by the current exporter", async () => {
+  const policy = await loadOfficialPolicy(policyFile);
+  assert.ok(policy.normalizedSchemas.includes(NORMALIZED_SCHEMA_VERSION));
+});
 test("release policy rejects extra and missing fields", async () => {
   await assert.rejects(
     loadOfficialPolicy(await changedPolicy((policy) => (policy.candidatePolicy = {}))),

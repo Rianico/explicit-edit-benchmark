@@ -1037,7 +1037,7 @@
       }
     ]
   },
-  "normalizedSchemas": [1],
+  "normalizedSchemas": [1, 2],
   "runPolicy": {
     "partialRuns": true,
     "oracleRecoveries": 0,

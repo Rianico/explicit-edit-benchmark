@@ -7,6 +7,8 @@ import { callData, toolCategory } from "./build-trajectory-analysis.mjs";
 import { inspectHarnessOutput } from "./harness-runtime.mjs";
 import { canonicalModelProvider, loadModelRegistry } from "./model-registry.mjs";
 
+export const NORMALIZED_SCHEMA_VERSION = 2;
+
 const COMMAND_FEATURES = [
   ["search", /(^|[;&|()\s])(rg|grep|find)(\s|$)/],
   ["read", /(^|[;&|()\s])(cat|head|tail|sed|awk|wc)(\s|$)/],
@@ -260,7 +262,7 @@ export async function exportNormalizedRun(rootDirectory, outputDirectory, option
       adapter.modelFamily ?? adapter.model,
       adapter.provider ?? null,
     );
-  const schemaVersion = 2;
+  const schemaVersion = NORMALIZED_SCHEMA_VERSION;
   const configurationsByHash = new Map();
   const profiles = Object.entries(adapters).map(([id, adapter]) => {
     const configuration = safeConfiguration(adapter);
