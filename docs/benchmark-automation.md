@@ -179,13 +179,15 @@ It uploads no prompts, model prose, command text, raw arguments, output, session
 
 ## Accept a candidate
 
-A maintainer accepts locally or through `.github/workflows/accept-huggingface-observation.yml`:
+After review and explicit maintainer approval, production acceptance runs through `.github/workflows/accept-huggingface-observation.yml`:
 
 ```sh
-HF_TOKEN=hf_... npm run benchmark -- accept \
-  --repository OWNER/DATASET \
-  --candidate PR_NUMBER_OR_REF
+gh workflow run accept-huggingface-observation.yml \
+  -f dataset_repository=OWNER/DATASET \
+  -f candidate_ref=PR_NUMBER_OR_REF
 ```
+
+Maintainers use the local command only with `--dry-run` during review. They do not publish from a workstation. The workflow keeps the write token on GitHub, serializes Dataset updates, validates the candidate again, rebuilds the generated files, and publishes the parent-checked commit.
 
 Acceptance downloads current `main` and the candidate revision separately. It copies the whole `source/` store from main, validates and appends exactly one candidate through the strict ingestion path, and runs the normalized validator again while rebuilding. Then it rebuilds every canonical shard and summary from all retained sources.
 

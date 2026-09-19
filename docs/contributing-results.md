@@ -31,4 +31,4 @@ The pull request holds benchmark facts only. The [README](../README.md#what-gets
 
 Ordinary local candidates are `unverified` and follow the repository's contribution review. Official candidates from the approved reusable workflow are verified and accepted automatically by policy; they do not wait for a maintainer to approve their score. Code changes to tasks, adapters, policies, and workflows still require normal pull-request review.
 
-Acceptance appends evidence to `source/accepted/` and rebuilds every generated view in one parent-checked commit. [Benchmark automation and public data](benchmark-automation.md) describes the data format and acceptance internals.
+After an ordinary candidate passes review and a maintainer explicitly approves it, the maintainer dispatches the repository's **Accept Hugging Face observation** workflow. Production acceptance never runs from a maintainer workstation. The workflow appends evidence to `source/accepted/` and rebuilds every generated view in one serialized, parent-checked commit. [Benchmark automation and public data](benchmark-automation.md) describes the data format and acceptance internals.
