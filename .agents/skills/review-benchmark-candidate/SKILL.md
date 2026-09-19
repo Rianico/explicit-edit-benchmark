@@ -64,7 +64,15 @@ Tell the user what you found, in plain words: the kind of pull request, who sent
 
 Ask the user with the ask tool before any write, and offer three outcomes: accept or merge, request changes, reject. Keep the question short and do not bundle it with unrelated questions. Do not skip it because validation passed, and do not merge on your own initiative.
 
-- **Accept a candidate**: `npm run benchmark -- accept --repository alexshpunt/explicit-edit-benchmark --candidate PR_NUMBER`. Report the accepted Dataset commit.
+- **Accept an ordinary candidate**: dispatch `.github/workflows/accept-huggingface-observation.yml` after the user confirms. Do not run a production `accept` command locally. Use:
+
+  ```sh
+  gh workflow run accept-huggingface-observation.yml \
+    -f dataset_repository=alexshpunt/explicit-edit-benchmark \
+    -f candidate_ref=PR_NUMBER
+  ```
+
+  Record the workflow URL, wait for it to finish, and report the accepted Dataset commit. The workflow owns the maintainer token, serialization, validation, rebuild, and publication.
 - **Merge a code pull request**: merge in GitHub once CI is green. Report the merge commit.
 - **Request changes**: write the review comment with the exact failing evidence.
 - **Reject**: explain why and leave the branch open.
