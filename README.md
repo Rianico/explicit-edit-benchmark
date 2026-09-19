@@ -24,6 +24,8 @@ The tasks are small on purpose. None of them needs deep reasoning or domain know
 
 There are 226 of them: replacements, insertions, deletions, copies, moves, large files, several file types, and Unicode edge cases. A verifier compares the result byte for byte.
 
+**What the tasks actually are:** [Benchmark tasks](docs/tasks.md) lists every task family, explains what each scale means, and shows how the generator increases context, matches, files, decoys, block size, and Unicode risk.
+
 **Where results live:** the [Benchmark Explorer](https://huggingface.co/spaces/alexshpunt/benchmark-explorer) shows current rankings, and the [Hugging Face Dataset](https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark) stores every accepted run.
 
 The benchmark grows with the people who run it. Run it on your own harness and configuration, publish the result, and it joins the same database and counts towards the statistics.
@@ -181,7 +183,8 @@ It runs formatting, linting, type checks, the unit and integration tests, and on
 | [Configuration guide](docs/running.md)                               | Per-adapter model and auth details, provider routes, mounts, lower-level commands    |
 | [Share a result](docs/contributing-results.md)                       | The submission flow step by step, and what happens after you open the pull request   |
 | [Benchmark automation and public data](docs/benchmark-automation.md) | The config API, the normalized data format, and the Dataset views                    |
-| [Methodology](docs/methodology.md)                                   | How tasks are generated, what the scores mean, and how recovery works                |
+| [Benchmark tasks](docs/tasks.md)                                     | Every task family, scale, language, Unicode variant, and generation rule             |
+| [Methodology](docs/methodology.md)                                   | What the scores mean, how exact verification works, and how recovery works           |
 | [Architecture](docs/architecture.md)                                 | Where each fact lives, and which layer owns what                                     |
 
 ## Skills for coding agents

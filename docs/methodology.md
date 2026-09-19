@@ -1,6 +1,6 @@
 # Methodology
 
-Explicit Edit has 226 generated mechanical editing tasks.
+Explicit Edit has 226 generated mechanical editing tasks. [Benchmark tasks](tasks.md) explains every family, scale, language fixture, Unicode variant, and generation rule.
 
 `npm run bench:list` prints the task IDs, categories, and fixture hashes. Generation is deterministic, and both the inputs and the expected outputs stay in the parent verifier. The model sees the prompt and the input workspace, never the expected tree.
 
