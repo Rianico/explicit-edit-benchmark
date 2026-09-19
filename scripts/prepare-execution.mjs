@@ -7,6 +7,12 @@ import { parseArgs } from "node:util";
 import { adapterDefinition } from "./adapter-registry.mjs";
 import { dshCredentialDocument } from "./export-pi-oauth-to-dsh.mjs";
 
+const OMP_API_KEY_ENV = Object.freeze({
+  deepseek: "DEEPSEEK_API_KEY",
+  zai: "ZAI_API_KEY",
+  xiaomi: "XIAOMI_API_KEY",
+  "opencode-go": "OPENCODE_API_KEY",
+});
 async function privateJson(file, value) {
   await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -79,29 +85,36 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
       await symlink(bun, bunLink).catch((error) => {
         if (error.code !== "EEXIST") throw error;
       });
-      const ompHome = path.join(directory, "omp");
-      const imported = await privateJson(path.join(directory, "omp-import.json"), {
-        type: "codex",
-        access_token: credential.access,
-        refresh_token: credential.refresh,
-        account_id: credential.accountId,
-        expired: new Date(credential.expires).toISOString(),
-      });
-      execFileSync(command, ["auth-broker", "import", imported], {
-        env: {
-          ...process.env,
-          PATH: `${path.join(runtime, "node_modules", ".bin")}:${process.env.PATH ?? ""}`,
-          PI_CODING_AGENT_DIR: ompHome,
-        },
-        stdio: ["ignore", "ignore", "inherit"],
-      });
-      await rm(imported, { force: true });
-      const database = path.join(ompHome, "agent.db");
-      await chmod(database, 0o600);
-      args.push("--auth-file", database);
-      const envFile = await privateJson(path.join(directory, "omp-env.json"), {
+      const environment = {
         PATH: `${path.join(runtime, "node_modules", ".bin")}:/usr/local/bin:/usr/bin:/bin`,
-      });
+      };
+      if (credential.type === "api_key") {
+        const apiKeyEnv = OMP_API_KEY_ENV[plan.provider];
+        if (!apiKeyEnv) throw Error(`Oh My Pi has no API-key route for ${plan.provider}`);
+        environment[apiKeyEnv] = credential.key;
+      } else {
+        const ompHome = path.join(directory, "omp");
+        const imported = await privateJson(path.join(directory, "omp-import.json"), {
+          type: "codex",
+          access_token: credential.access,
+          refresh_token: credential.refresh,
+          account_id: credential.accountId,
+          expired: new Date(credential.expires).toISOString(),
+        });
+        execFileSync(command, ["auth-broker", "import", imported], {
+          env: {
+            ...process.env,
+            PATH: `${path.join(runtime, "node_modules", ".bin")}:${process.env.PATH ?? ""}`,
+            PI_CODING_AGENT_DIR: ompHome,
+          },
+          stdio: ["ignore", "ignore", "inherit"],
+        });
+        await rm(imported, { force: true });
+        const database = path.join(ompHome, "agent.db");
+        await chmod(database, 0o600);
+        args.push("--auth-file", database);
+      }
+      const envFile = await privateJson(path.join(directory, "omp-env.json"), environment);
       args.push("--env-file", envFile);
       break;
     }

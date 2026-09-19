@@ -37,6 +37,26 @@ async function runtime(root, adapter) {
     await mkdir(path.join(root, "node_modules", definition.extensionPackage), { recursive: true });
 }
 
+test("Oh My Pi passes API-key providers through their native environment variable", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "execution-route-"));
+  await runtime(root, "oh-my-pi-default");
+  const args = await prepareExecution({
+    plan: {
+      adapter: "oh-my-pi-default",
+      provider: "opencode-go",
+      model: "opencode-go/deepseek-v4.1-flash",
+      reasoning: "low",
+      packages: [{ role: "agent", version: "18.2.6" }],
+    },
+    credentialStore: { "opencode-go": { type: "api_key", key: "opencode-secret" } },
+    runtime: root,
+    directory: path.join(root, "private"),
+  });
+  assert.equal(args.includes("--auth-file"), false);
+  const environment = JSON.parse(await readFile(args[args.indexOf("--env-file") + 1], "utf8"));
+  assert.equal(environment.OPENCODE_API_KEY, "opencode-secret");
+});
+
 for (const adapter of Object.keys(ADAPTERS)) {
   test(`${adapter} derives its private execution setup from the canonical registry`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "execution-route-"));
