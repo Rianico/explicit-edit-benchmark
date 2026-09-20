@@ -39,10 +39,15 @@ test("community batch accepts valid candidates and leaves invalid candidates for
       { number: 79, runId: "invalid" },
       { number: 80, runId: "deferred" },
     ],
-    accessToken: "token",
+    accessToken: "dataset-token",
+    discussionAccessToken: "discussion-token",
     workspaceDirectory: "/tmp/community-test",
     accept: async (options) => {
-      calls.push(options.candidateRevision);
+      calls.push({
+        candidateRevision: options.candidateRevision,
+        accessToken: options.accessToken,
+        discussionAccessToken: options.discussionAccessToken,
+      });
       if (options.candidateRevision === "79") throw Error("invalid normalized bundle");
       if (options.candidateRevision === "80")
         throw Object.assign(Error("Hub failed 503"), { status: 503 });
@@ -58,7 +63,14 @@ test("community batch accepts valid candidates and leaves invalid candidates for
     },
   });
 
-  assert.deepEqual(calls, ["78", "79", "80"]);
+  assert.deepEqual(
+    calls,
+    ["78", "79", "80"].map((candidateRevision) => ({
+      candidateRevision,
+      accessToken: "dataset-token",
+      discussionAccessToken: "discussion-token",
+    })),
+  );
   assert.equal(result.accepted.length, 1);
   assert.equal(result.accepted[0].index, undefined);
   assert.deepEqual(

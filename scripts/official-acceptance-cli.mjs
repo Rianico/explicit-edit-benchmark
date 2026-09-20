@@ -23,6 +23,7 @@ async function main() {
       repository,
       candidateNumbers: [candidate],
       accessToken: process.env.HF_TOKEN,
+      discussionAccessToken: process.env.HF_DISCUSSION_TOKEN,
       workspaceDirectory: process.env.RUNNER_TEMP
         ? path.join(process.env.RUNNER_TEMP, `official-accept-${candidate}`)
         : path.resolve(".tmp", `official-accept-${candidate}`),
@@ -37,6 +38,7 @@ async function main() {
       repository,
       candidateNumbers: candidates,
       accessToken: process.env.HF_TOKEN,
+      discussionAccessToken: process.env.HF_DISCUSSION_TOKEN,
       workspaceDirectory: process.env.RUNNER_TEMP
         ? path.join(process.env.RUNNER_TEMP, "official-accept-batch")
         : path.resolve(".tmp", "official-accept-batch"),

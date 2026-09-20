@@ -25,6 +25,7 @@ export async function acceptCommunityCandidates({
   repository,
   candidates,
   accessToken,
+  discussionAccessToken,
   workspaceDirectory,
   dryRun = false,
   accept = acceptHuggingFaceCandidate,
@@ -38,6 +39,7 @@ export async function acceptCommunityCandidates({
         repository,
         candidateRevision: String(candidate.number),
         accessToken,
+        discussionAccessToken,
         workspaceDirectory: path.join(workspaceDirectory, `community-${candidate.number}`),
         dryRun,
       });
@@ -73,6 +75,7 @@ async function main() {
     repository,
     candidates,
     accessToken: process.env.HF_TOKEN,
+    discussionAccessToken: process.env.HF_DISCUSSION_TOKEN,
     workspaceDirectory: process.env.RUNNER_TEMP
       ? path.join(process.env.RUNNER_TEMP, "community-accept-batch")
       : path.resolve(".tmp", "community-accept-batch"),

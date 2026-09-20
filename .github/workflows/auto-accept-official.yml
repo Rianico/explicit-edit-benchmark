@@ -139,6 +139,7 @@ jobs:
         env:
           DATASET_REPOSITORY: alexshpunt/explicit-edit-benchmark
           CANDIDATE: ${{ inputs.candidate }}
+          HF_DISCUSSION_TOKEN: ${{ secrets.HF_TOKEN }}
           MAX_CANDIDATES: "4"
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
@@ -169,6 +170,7 @@ jobs:
         env:
           DATASET_REPOSITORY: alexshpunt/explicit-edit-benchmark
           MAX_CANDIDATES: "4"
+          HF_DISCUSSION_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
           result="$RUNNER_TEMP/community-result.json"
