@@ -187,7 +187,7 @@ gh workflow run accept-huggingface-observation.yml \
   -f candidate_ref=PR_NUMBER_OR_REF
 ```
 
-Maintainers use the local command only with `--dry-run` during review. They do not publish from a workstation. The workflow keeps the write token on GitHub, serializes Dataset updates, validates the candidate again, rebuilds the generated files, and publishes the parent-checked commit.
+Maintainers run both review dry-runs and production acceptance through the workflow. Set its `dry_run` input to `true` to validate and rebuild without publishing. Do not download, validate, or publish Dataset candidates from a maintainer workstation. The workflow keeps the token on GitHub, serializes Dataset operations, validates the candidate, rebuilds the generated files, and publishes the parent-checked commit only when `dry_run` is false.
 
 Acceptance downloads current `main` and the candidate revision separately. It copies the whole `source/` store from main, validates and appends exactly one candidate through the strict ingestion path, and runs the normalized validator again while rebuilding. Then it rebuilds every canonical shard and summary from all retained sources.
 
