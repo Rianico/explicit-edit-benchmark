@@ -111,6 +111,26 @@ async function findOfficialCandidate(snapshot) {
   return candidate;
 }
 
+async function closeAcceptedCandidates({
+  accepted,
+  repository,
+  discussionToken,
+  datasetCommit,
+  close,
+}) {
+  for (const item of accepted) {
+    try {
+      const receipt = item.duplicate
+        ? `Execution ${item.executionId} was already accepted on Dataset main at ${datasetCommit}.`
+        : `Accepted verified execution ${item.executionId} in Dataset commit ${datasetCommit}.`;
+      await close(repository, item.candidate, discussionToken, receipt);
+      item.candidateClosed = true;
+    } catch (error) {
+      item.candidateClosed = false;
+      item.closeError = error.message;
+    }
+  }
+}
 async function closeCandidate(repository, candidateNumber, token, receipt) {
   const response = await fetch(
     `https://huggingface.co/api/datasets/${repository}/discussions/${candidateNumber}/status`,
@@ -409,8 +429,17 @@ export async function acceptOfficialCandidates({
     }
   }
 
-  if (!accepted.some((item) => !item.duplicate))
+  if (!accepted.some((item) => !item.duplicate)) {
+    if (!dryRun)
+      await closeAcceptedCandidates({
+        accepted,
+        repository,
+        discussionToken,
+        datasetCommit: parentCommit,
+        close,
+      });
     return { parentCommit, commitOid: null, dryRun, accepted, rejected, deferred };
+  }
   await mkdir(path.join(output, "source"), { recursive: true });
   const sourceContent = JSON.stringify(sourceIndex, null, 2) + "\n";
   await writeFile(path.join(output, "source", "index.json"), sourceContent);
@@ -441,18 +470,13 @@ export async function acceptOfficialCandidates({
   });
   const commitOid = result.commit.oid;
   if (!commitOid) throw Error("Hugging Face did not return a dataset commit");
-  for (const item of accepted) {
-    try {
-      const receipt = item.duplicate
-        ? `Execution ${item.executionId} was already accepted before Dataset commit ${commitOid}.`
-        : `Accepted verified execution ${item.executionId} in Dataset commit ${commitOid}.`;
-      await close(repository, item.candidate, discussionToken, receipt);
-      item.candidateClosed = true;
-    } catch (error) {
-      item.candidateClosed = false;
-      item.closeError = error.message;
-    }
-  }
+  await closeAcceptedCandidates({
+    accepted,
+    repository,
+    discussionToken,
+    datasetCommit: commitOid,
+    close,
+  });
   return { parentCommit, commitOid, accepted, rejected, deferred };
 }
 

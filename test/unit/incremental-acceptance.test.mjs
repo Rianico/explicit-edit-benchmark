@@ -6,6 +6,7 @@ import test from "node:test";
 import { createAggregateState } from "../../scripts/aggregate-state.mjs";
 import { verifyIncrementalDatasetState } from "../../scripts/huggingface-contributions.mjs";
 import {
+  acceptOfficialCandidates,
   incrementalCommitOperations,
   isDeferredHubError,
   listOpenOfficialCandidates,
@@ -67,6 +68,66 @@ test("official candidate listing keeps the execution identity for durable duplic
     }),
   }));
   assert.deepEqual(candidates, [{ number: 45, executionId }]);
+});
+
+test("already accepted official candidates receive a receipt and are closed", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "official-duplicate-"));
+  const executionId = "a".repeat(64);
+  const parentCommit = "b".repeat(40);
+  const sourceIndex = { submissions: [{ runId: "run-1", submissionId: "submission-1" }] };
+  const run = {
+    runId: "run-1",
+    submissionId: "submission-1",
+    manifestSha256: "c".repeat(64),
+    official: { executionId },
+  };
+  const aggregateState = createAggregateState({
+    sourceIndex,
+    run,
+    profiles: [],
+    trials: [],
+    rounds: [],
+    toolCalls: [],
+  });
+  const documents = {
+    "source/index.json": sourceIndex,
+    "dataset-index.json": { runs: [run] },
+    "aggregate-state.json": aggregateState,
+  };
+  const closed = [];
+  const hub = {
+    async *listCommits() {
+      yield { oid: parentCommit };
+    },
+    async downloadFile({ path: filePath }) {
+      return new Blob([JSON.stringify(documents[filePath])]);
+    },
+  };
+
+  try {
+    const result = await acceptOfficialCandidates({
+      repository: "owner/dataset",
+      candidateNumbers: [{ number: 44, executionId }],
+      accessToken: "dataset-token",
+      discussionAccessToken: "discussion-token",
+      workspaceDirectory: workspace,
+      hub,
+      close: async (...args) => closed.push(args),
+    });
+
+    assert.equal(result.commitOid, null);
+    assert.equal(result.accepted[0].candidateClosed, true);
+    assert.deepEqual(closed, [
+      [
+        "owner/dataset",
+        44,
+        "discussion-token",
+        `Execution ${executionId} was already accepted on Dataset main at ${parentCommit}.`,
+      ],
+    ]);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
 });
 
 test("incremental commit contains only new source, shards, and compact views", async () => {
