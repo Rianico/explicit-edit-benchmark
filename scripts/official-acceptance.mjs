@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { commit, downloadFile, listCommits, listFiles, snapshotDownload } from "@huggingface/hub";
 import { ingestSubmission } from "./benchmark-ingestion.mjs";
 import { buildSubmission } from "./benchmark-submission.mjs";
@@ -12,12 +13,13 @@ import {
   buildPublicDataset,
   buildPublicDatasetFromStore,
 } from "./build-public-dataset.mjs";
-import { appendAggregateRun, verifyAggregateState } from "./aggregate-state.mjs";
+import { appendAggregateRun } from "./aggregate-state.mjs";
 import {
   assertPreserved,
   headCommit,
   publishDirectory,
   readDatasetIndex,
+  verifyIncrementalDatasetState,
 } from "./huggingface-contributions.mjs";
 import { resolveHuggingFaceToken } from "./huggingface-auth.mjs";
 import { OfficialVerificationError, officialVerdict } from "./official-verifier.mjs";
@@ -131,6 +133,10 @@ function parseJsonLines(content) {
     .map((line) => JSON.parse(line));
 }
 
+async function parseCompressedJsonLines(filePath) {
+  return parseJsonLines(gunzipSync(await readFile(filePath)).toString("utf8"));
+}
+
 async function downloadJson(hub, repo, revision, accessToken, filePath) {
   const blob = await hub.downloadFile({ repo, revision, accessToken, path: filePath });
   if (!blob) throw Error(`Dataset is missing ${filePath}`);
@@ -157,9 +163,10 @@ export async function incrementalCommitOperations(root, directory = root) {
 export function isDeferredHubError(error) {
   const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
   return (
+    status === 409 ||
     status === 429 ||
     (status >= 500 && status <= 599) ||
-    /\b(?:429|5\d\d)\b/u.test(String(error?.message ?? error))
+    /\b(?:409|429|5\d\d)\b/u.test(String(error?.message ?? error))
   );
 }
 
@@ -229,7 +236,7 @@ export async function acceptOfficialCandidates({
       downloadJson(hub, repo, parentCommit, token, "dataset-index.json"),
       downloadJson(hub, repo, parentCommit, token, "aggregate-state.json"),
     ]);
-    verifyAggregateState(aggregateState, sourceIndex);
+    verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState);
   } catch (error) {
     return {
       parentCommit,
@@ -278,9 +285,9 @@ export async function acceptOfficialCandidates({
         attestationVerifier,
       });
       const normalized = path.join(prepared.extracted, "normalized");
-      const normalizedManifest = JSON.parse(
-        await readFile(path.join(normalized, "manifest.json"), "utf8"),
-      );
+      const normalizedManifestFile = path.join(normalized, "manifest.json");
+      const normalizedManifest = JSON.parse(await readFile(normalizedManifestFile, "utf8"));
+      await writeFile(normalizedManifestFile, JSON.stringify(normalizedManifest, null, 2) + "\n");
       const runId = prepared.verified.manifest.executionIdentity.executionId;
       const metadata = await submissionMetadata(normalized, runId);
       metadata.purpose = "official";
@@ -326,18 +333,18 @@ export async function acceptOfficialCandidates({
         submissions: sourceIndex.submissions.slice(0, -1),
       };
       const evidence = {
-        profiles: parseJsonLines(
-          await readFile(path.join(normalized, "profiles.jsonl"), "utf8"),
-        ).map((row) => ({ runId: normalizedManifest.runId, ...row })),
-        trials: parseJsonLines(await readFile(path.join(normalized, "trials.jsonl"), "utf8")).map(
-          (row) => ({ runId: normalizedManifest.runId, ...row }),
+        profiles: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "profiles", `${normalizedManifest.runId}.jsonl.gz`),
         ),
-        rounds: parseJsonLines(await readFile(path.join(normalized, "rounds.jsonl"), "utf8")).map(
-          (row) => ({ runId: normalizedManifest.runId, ...row }),
+        trials: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "trials", `${normalizedManifest.runId}.jsonl.gz`),
         ),
-        toolCalls: parseJsonLines(
-          await readFile(path.join(normalized, "tool-calls.jsonl"), "utf8"),
-        ).map((row) => ({ runId: normalizedManifest.runId, ...row })),
+        rounds: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "rounds", `${normalizedManifest.runId}.jsonl.gz`),
+        ),
+        toolCalls: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "tool-calls", `${normalizedManifest.runId}.jsonl.gz`),
+        ),
       };
       aggregateState = appendAggregateRun(aggregateState, {
         previousSourceIndex,
@@ -445,128 +452,6 @@ export async function acceptOfficialCandidates({
     }
   }
   return { parentCommit, commitOid, accepted, rejected, deferred };
-}
-/** Verify, append, rebuild, and atomically publish one immutable official candidate revision. */
-export async function acceptOfficialCandidate({
-  repository,
-  candidateNumber,
-  accessToken,
-  workspaceDirectory,
-  hub = defaultHub,
-  attestationVerifier = verifyAttestation,
-  close = closeCandidate,
-}) {
-  if (!REPOSITORY.test(repository ?? "")) throw Error("Dataset repository must be owner/name");
-  if (!/^\d+$/.test(String(candidateNumber))) throw Error("Candidate number must be numeric");
-  const token = await resolveHuggingFaceToken({ accessToken });
-  if (!token) throw Error("HF_TOKEN is required to accept an official candidate");
-  const repo = { type: "dataset", name: repository };
-  const parentCommit = await headCommit(hub, repo, token);
-  const workspace = path.resolve(workspaceDirectory);
-  await mkdir(workspace, { recursive: true });
-  const mainSnapshot = await hub.snapshotDownload({
-    repo,
-    revision: parentCommit,
-    accessToken: token,
-    cacheDir: path.join(workspace, "cache-main"),
-  });
-  const candidateRoot = path.join(workspace, "candidate-snapshot");
-  const candidateDirectory = path.join(candidateRoot, "candidates", "official", "execution");
-  const { candidateCommit } = await downloadOfficialCandidate(
-    hub,
-    repo,
-    repository,
-    candidateNumber,
-    token,
-    candidateDirectory,
-  );
-  const candidate = await findOfficialCandidate(candidateRoot);
-  const transport = JSON.parse(await readFile(path.join(candidate, "transport.json"), "utf8"));
-  const extracted = path.join(workspace, "extracted");
-  await rm(extracted, { recursive: true, force: true });
-  const verdict = await officialVerdict({
-    candidateDirectory: candidate,
-    extractedDirectory: extracted,
-    policyFile: "policies/official-runs/v1.json",
-    signerSha: transport.signerWorkflowSha,
-    verifyAttestation: attestationVerifier,
-  });
-  if (verdict.status !== "accepted")
-    throw new OfficialVerificationError(
-      verdict.code,
-      `Official candidate rejected: ${verdict.code}: ${verdict.message ?? ""}`,
-    );
-  const verified = verdict.evidence;
-  const store = path.join(workspace, "store");
-  const outputDirectory = path.join(workspace, "dataset");
-  await rm(store, { recursive: true, force: true });
-  await rm(outputDirectory, { recursive: true, force: true });
-  await cp(path.join(mainSnapshot, "source"), store, { recursive: true, dereference: true });
-  const normalized = path.join(extracted, "normalized");
-  const normalizedManifest = JSON.parse(
-    await readFile(path.join(normalized, "manifest.json"), "utf8"),
-  );
-  const runId = verified.manifest.executionIdentity.executionId;
-  const metadata = await submissionMetadata(normalized, runId);
-  metadata.purpose = "official";
-  const submission = await buildSubmission(normalized, metadata);
-  const result = await ingestSubmission(
-    store,
-    { ownerId: verified.transport.producer.repository, verification: "verified" },
-    submission,
-  );
-  if (!result.created) throw Error("Official observation already exists on main");
-  const proofRoot = path.join(store, "official");
-  await mkdir(proofRoot, { recursive: true });
-  const proof = path.join(proofRoot, runId);
-  await mkdir(proof, { recursive: false });
-  await Promise.all([
-    cp(verified.artifact, path.join(proof, "official-result.tar.gz")),
-    cp(verified.attestation, path.join(proof, "attestation.jsonl")),
-    cp(path.join(candidate, "transport.json"), path.join(proof, "transport.json")),
-    writeFile(
-      path.join(proof, "acceptance.json"),
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          executionId: runId,
-          normalizedRunId: normalizedManifest.runId,
-          artifactSha256: verified.artifactSha256,
-          candidateNumber: Number(candidateNumber),
-          candidateCommit,
-          datasetParentCommit: parentCommit,
-          signerWorkflowSha: transport.signerWorkflowSha,
-          policyId: verified.policy.policyId,
-        },
-        null,
-        2,
-      )}\n`,
-    ),
-  ]);
-  const index = await buildPublicDatasetFromStore(outputDirectory, store);
-  assertPreserved(await readDatasetIndex(mainSnapshot), index);
-  const commitOid = await publishDirectory({
-    hub,
-    repo,
-    accessToken: token,
-    parentCommit,
-    outputDirectory,
-    title: `Accept verified benchmark execution ${runId}`,
-  });
-  let candidateClosed = true;
-  let closeError = null;
-  try {
-    await close(
-      repository,
-      Number(candidateNumber),
-      token,
-      `Accepted verified execution ${runId} in Dataset commit ${commitOid}.`,
-    );
-  } catch (error) {
-    candidateClosed = false;
-    closeError = String(error?.message ?? error);
-  }
-  return { executionId: runId, candidateCommit, commitOid, candidateClosed, closeError };
 }
 
 /** Rebuild every derived Dataset file from immutable canonical source and publish atomically. */

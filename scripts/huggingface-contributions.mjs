@@ -1,18 +1,25 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { gunzipSync } from "node:zlib";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   commit,
+  downloadFile,
   listCommits,
   listFiles,
-  snapshotDownload,
   uploadFiles,
   whoAmI,
 } from "@huggingface/hub";
 import { buildSubmission } from "./benchmark-submission.mjs";
 import { ingestSubmission } from "./benchmark-ingestion.mjs";
-import { buildPublicDatasetFromStore } from "./build-public-dataset.mjs";
+import {
+  buildDerivedDatasetFromAggregateState,
+  buildPublicDataset,
+} from "./build-public-dataset.mjs";
+import { appendAggregateRun, verifyAggregateState } from "./aggregate-state.mjs";
 import { resolveHuggingFaceToken } from "./huggingface-auth.mjs";
 
 const TABLES = [
@@ -26,7 +33,7 @@ const CANDIDATE_FILES = ["manifest.json", ...TABLES, "submission.json"];
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const defaultHub = { commit, listCommits, listFiles, snapshotDownload, uploadFiles, whoAmI };
+const defaultHub = { commit, downloadFile, listCommits, listFiles, uploadFiles, whoAmI };
 
 function datasetRepository(repository) {
   if (!REPOSITORY.test(repository ?? ""))
@@ -183,38 +190,115 @@ export async function submitHuggingFaceCandidate({
   return { runId, pullRequestUrl: result.pullRequestUrl, commitOid: result.commit.oid };
 }
 
-function candidateRef(value) {
-  if (!value) throw Error("A candidate PR number or revision is required");
-  return /^\d+$/.test(value) ? `refs/pr/${value}` : value;
+function parseJsonLines(content) {
+  return content
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
-async function findCandidate(snapshot) {
-  const root = path.join(snapshot, "candidates");
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch (error) {
-    if (error?.code === "ENOENT")
-      throw Error("Candidate revision contains no candidates directory", { cause: error });
-    throw error;
+async function parseCompressedJsonLines(filePath) {
+  return parseJsonLines(gunzipSync(await readFile(filePath)).toString("utf8"));
+}
+
+async function canonicalizeCandidateManifest(candidateDirectory) {
+  const manifestFile = path.join(candidateDirectory, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
+}
+
+/** Fail closed unless compact source, Dataset, and aggregate indexes describe the same runs. */
+export function verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState) {
+  verifyAggregateState(aggregateState, sourceIndex);
+  const sources = sourceIndex.submissions ?? [];
+  const runs = datasetIndex.runs ?? [];
+  const contributions = aggregateState.contributions ?? [];
+  if (sources.length !== runs.length || runs.length !== contributions.length)
+    throw Error("Incremental Dataset state has different run counts");
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index];
+    const run = runs[index];
+    const aggregateRun = contributions[index].run;
+    if (source.runId !== run.runId || source.submissionId !== run.submissionId)
+      throw Error("Dataset index does not match source index");
+    if (!isDeepStrictEqual(aggregateRun, run))
+      throw Error("Dataset index does not match aggregate state");
   }
-  const directories = entries.filter((entry) => entry.isDirectory());
-  if (directories.length !== 1 || entries.length !== 1)
-    throw Error("Candidate revision must contain exactly one candidate directory");
-  const directory = path.join(root, directories[0].name);
-  const candidateEntries = await readdir(directory, { withFileTypes: true });
-  const candidateTypes = await Promise.all(
-    candidateEntries.map((entry) => stat(path.join(directory, entry.name))),
+}
+
+async function downloadJson(hub, repo, revision, accessToken, filePath) {
+  const blob = await hub.downloadFile({ repo, revision, accessToken, path: filePath });
+  if (!blob) throw Error(`Dataset is missing ${filePath}`);
+  return JSON.parse(await blob.text());
+}
+
+/** Download only the immutable files belonging to one ordinary Dataset candidate. */
+export async function downloadHuggingFaceCandidate({
+  hub,
+  repo,
+  repository,
+  candidateNumber,
+  accessToken,
+  directory,
+  fetchImpl = fetch,
+}) {
+  if (!/^\d+$/.test(String(candidateNumber))) throw Error("Candidate number must be numeric");
+  const response = await fetchImpl(
+    `https://huggingface.co/api/datasets/${repository}/discussions/${candidateNumber}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
   );
-  if (candidateTypes.some((entry) => !entry.isFile()))
-    throw Error("Every candidate bundle entry must resolve to a regular file");
-  const files = candidateEntries.map((entry) => entry.name).sort();
+  if (!response.ok) throw Error(`Hugging Face candidate lookup failed (${response.status})`);
+  const discussion = await response.json();
+  const prefix = "Contribute benchmark observation ";
   if (
-    files.length !== CANDIDATE_FILES.length ||
-    files.some((name, index) => name !== [...CANDIDATE_FILES].sort()[index])
+    !discussion.isPullRequest ||
+    discussion.status !== "open" ||
+    !discussion.title.startsWith(prefix)
   )
-    throw Error(`Candidate files must be exactly ${[...CANDIDATE_FILES].sort().join(", ")}`);
-  return directory;
+    throw Error("Candidate is not an open benchmark observation pull request");
+  const runId = discussion.title.slice(prefix.length);
+  if (!SAFE_SEGMENT.test(runId)) throw Error("Candidate title has an invalid run ID");
+  const commits = discussion.events.filter((event) => event.type === "commit");
+  const candidateCommit = commits.at(-1)?.data?.oid;
+  if (!/^[a-f0-9]{40}$/.test(candidateCommit ?? ""))
+    throw Error("Candidate has no immutable head commit");
+
+  await mkdir(directory, { recursive: true });
+  for (const name of CANDIDATE_FILES) {
+    const blob = await hub.downloadFile({
+      repo,
+      path: `candidates/${runId}/${name}`,
+      revision: candidateCommit,
+      accessToken,
+    });
+    if (!blob) throw Error(`Candidate is missing ${name}`);
+    await writeFile(path.join(directory, name), Buffer.from(await blob.arrayBuffer()), {
+      flag: "wx",
+    });
+  }
+  return { candidateCommit, runId };
+}
+
+/** Post the acceptance receipt and close a materialized Dataset candidate. */
+export async function closeHuggingFaceCandidate(
+  repository,
+  candidateNumber,
+  token,
+  receipt,
+  fetchImpl = fetch,
+) {
+  const response = await fetchImpl(
+    `https://huggingface.co/api/datasets/${repository}/discussions/${candidateNumber}/status`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "closed", comment: receipt }),
+    },
+  );
+  if (!response.ok)
+    throw Error(
+      `Hugging Face candidate close failed (${response.status}): ${await response.text()}`,
+    );
 }
 
 export async function readDatasetIndex(snapshot) {
@@ -236,7 +320,10 @@ export function assertPreserved(currentIndex, nextIndex) {
   }
 }
 
-/** Accept one HF candidate against current main and atomically publish a complete rebuilt dataset. */
+/**
+ * Validate one ordinary candidate, append its immutable source and shards, and update compact views.
+ * Historical source bundles and public data shards are never downloaded on this path.
+ */
 export async function acceptHuggingFaceCandidate({
   repository,
   candidateRevision,
@@ -244,55 +331,197 @@ export async function acceptHuggingFaceCandidate({
   workspaceDirectory,
   dryRun = false,
   hub = defaultHub,
+  fetchImpl = fetch,
+  close = closeHuggingFaceCandidate,
 }) {
   const repo = datasetRepository(repository);
   const token = await resolveHuggingFaceToken({ accessToken });
   if (!token) throw Error("HF_TOKEN is required to accept a Hugging Face candidate");
+  const candidateNumber = String(candidateRevision);
+  if (!/^\d+$/.test(candidateNumber)) throw Error("Candidate number must be numeric");
   const parentCommit = await headCommit(hub, repo, token);
   const workspace = path.resolve(workspaceDirectory);
+  await rm(workspace, { recursive: true, force: true });
   await mkdir(workspace, { recursive: true });
-  const mainSnapshot = await hub.snapshotDownload({
-    repo,
-    revision: parentCommit,
-    accessToken: token,
-    cacheDir: path.join(workspace, "cache-main"),
-  });
-  const candidateSnapshot = await hub.snapshotDownload({
-    repo,
-    revision: candidateRef(candidateRevision),
-    accessToken: token,
-    cacheDir: path.join(workspace, "cache-candidate"),
-  });
-  const source = path.join(mainSnapshot, "source");
-  try {
-    await readFile(path.join(source, "index.json"));
-  } catch (error) {
-    if (error?.code === "ENOENT")
-      throw Error("Dataset main has no retained source bundles", {
-        cause: error,
-      });
-    throw error;
-  }
-  const store = path.join(workspace, "store");
+
+  const [sourceIndex, datasetIndex, aggregateState] = await Promise.all([
+    downloadJson(hub, repo, parentCommit, token, "source/index.json"),
+    downloadJson(hub, repo, parentCommit, token, "dataset-index.json"),
+    downloadJson(hub, repo, parentCommit, token, "aggregate-state.json"),
+  ]);
+  verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState);
+
   const outputDirectory = path.join(workspace, "dataset");
-  await rm(store, { recursive: true, force: true });
-  await rm(outputDirectory, { recursive: true, force: true });
-  await cp(source, store, { recursive: true, dereference: true });
-  const candidate = await findCandidate(candidateSnapshot);
-  const materializedCandidate = path.join(workspace, "candidate");
-  await rm(materializedCandidate, { recursive: true, force: true });
-  await cp(candidate, materializedCandidate, { recursive: true, dereference: true });
-  const accepted = await ingestCandidate(store, materializedCandidate);
-  const index = await buildPublicDatasetFromStore(outputDirectory, store);
-  assertPreserved(await readDatasetIndex(mainSnapshot), index);
-  if (dryRun) return { index, outputDirectory, commitOid: null, runId: accepted.runId };
-  const commitOid = await publishDirectory({
+  const candidate = path.join(workspace, "candidate");
+  const { candidateCommit, runId: candidateRunId } = await downloadHuggingFaceCandidate({
     hub,
     repo,
+    repository,
+    candidateNumber,
     accessToken: token,
-    parentCommit,
-    outputDirectory,
-    title: `Accept benchmark observation ${accepted.runId}`,
+    directory: candidate,
+    fetchImpl,
   });
-  return { index, outputDirectory, commitOid, runId: accepted.runId };
+  await canonicalizeCandidateManifest(candidate);
+  const runOutput = path.join(workspace, "run");
+  const single = await buildPublicDataset(runOutput, [candidate]);
+  if (single.runs[0].runId !== candidateRunId)
+    throw Error("Candidate title does not match the normalized run ID");
+  const existingRun = datasetIndex.runs.find((run) => run.runId === candidateRunId);
+  if (existingRun) {
+    if (existingRun.manifestSha256 !== single.runs[0].manifestSha256)
+      throw Error("Candidate run ID already exists with different evidence");
+    if (dryRun)
+      return {
+        index: datasetIndex,
+        outputDirectory,
+        commitOid: null,
+        runId: candidateRunId,
+        candidateCommit,
+        operationCount: 0,
+        duplicate: true,
+      };
+    let candidateClosed = true;
+    let closeError = null;
+    try {
+      await close(
+        repository,
+        Number(candidateNumber),
+        token,
+        `Community observation ${candidateRunId} was already accepted on Dataset main at ${parentCommit}.`,
+        fetchImpl,
+      );
+    } catch (error) {
+      candidateClosed = false;
+      closeError = String(error?.message ?? error);
+    }
+    return {
+      index: datasetIndex,
+      outputDirectory,
+      commitOid: parentCommit,
+      runId: candidateRunId,
+      candidateCommit,
+      candidateClosed,
+      closeError,
+      operationCount: 0,
+      duplicate: true,
+    };
+  }
+  const store = path.join(workspace, "store");
+  await mkdir(store, { recursive: true });
+  await writeFile(path.join(store, "index.json"), JSON.stringify(sourceIndex, null, 2) + "\n");
+  const previousSourceIndex = structuredClone(sourceIndex);
+  const accepted = await ingestCandidate(store, candidate);
+  if (accepted.runId !== candidateRunId)
+    throw Error("Candidate title does not match the normalized run ID");
+
+  const nextSourceIndex = JSON.parse(await readFile(path.join(store, "index.json"), "utf8"));
+  const sourceMetadata = nextSourceIndex.submissions.find((item) => item.runId === accepted.runId);
+  if (!sourceMetadata) throw Error("Accepted candidate is missing source metadata");
+  const run = {
+    ...single.runs[0],
+    submissionId: sourceMetadata.submissionId,
+    ownerId: sourceMetadata.ownerId,
+    purpose: sourceMetadata.purpose,
+    verification: sourceMetadata.verification ?? "unverified",
+    definitions: sourceMetadata.definitions,
+  };
+  const evidence = {
+    profiles: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "profiles", `${accepted.runId}.jsonl.gz`),
+    ),
+    trials: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "trials", `${accepted.runId}.jsonl.gz`),
+    ),
+    rounds: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "rounds", `${accepted.runId}.jsonl.gz`),
+    ),
+    toolCalls: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "tool-calls", `${accepted.runId}.jsonl.gz`),
+    ),
+  };
+  const nextAggregateState = appendAggregateRun(aggregateState, {
+    previousSourceIndex,
+    sourceIndex: nextSourceIndex,
+    run,
+    ...evidence,
+  });
+  datasetIndex.runs.push(run);
+
+  const acceptedBundle = path.join(store, "accepted", sourceMetadata.submissionId);
+  await mkdir(path.join(outputDirectory, "source", "accepted"), { recursive: true });
+  await cp(
+    acceptedBundle,
+    path.join(outputDirectory, "source", "accepted", sourceMetadata.submissionId),
+    { recursive: true },
+  );
+  for (const table of ["profiles", "configurations", "trials", "rounds", "tool-calls"]) {
+    await mkdir(path.join(outputDirectory, "data", table), { recursive: true });
+    await cp(
+      path.join(runOutput, "data", table, `${accepted.runId}.jsonl.gz`),
+      path.join(outputDirectory, "data", table, `${accepted.runId}.jsonl.gz`),
+    );
+  }
+  await mkdir(path.join(outputDirectory, "source"), { recursive: true });
+  const sourceContent = JSON.stringify(nextSourceIndex, null, 2) + "\n";
+  await writeFile(path.join(outputDirectory, "source", "index.json"), sourceContent);
+  datasetIndex.source = {
+    path: "source/index.json",
+    bytes: Buffer.byteLength(sourceContent),
+    sha256: createHash("sha256").update(sourceContent).digest("hex"),
+  };
+  const index = await buildDerivedDatasetFromAggregateState(
+    outputDirectory,
+    datasetIndex,
+    nextAggregateState,
+  );
+  const outputFiles = await directoryFiles(outputDirectory);
+  if (dryRun)
+    return {
+      index,
+      outputDirectory,
+      commitOid: null,
+      runId: accepted.runId,
+      candidateCommit,
+      operationCount: outputFiles.length,
+    };
+
+  const operations = outputFiles.map((file) => ({
+    operation: "addOrUpdate",
+    ...file,
+  }));
+  const result = await hub.commit({
+    repo,
+    accessToken: token,
+    branch: "main",
+    parentCommit,
+    title: `Accept benchmark observation ${accepted.runId}`,
+    operations,
+  });
+  const commitOid = result.commit.oid;
+  if (!commitOid) throw Error("Hugging Face did not return a dataset commit");
+  let candidateClosed = true;
+  let closeError = null;
+  try {
+    await close(
+      repository,
+      Number(candidateNumber),
+      token,
+      `Accepted community observation ${accepted.runId} in Dataset commit ${commitOid}.`,
+      fetchImpl,
+    );
+  } catch (error) {
+    candidateClosed = false;
+    closeError = String(error?.message ?? error);
+  }
+  return {
+    index,
+    outputDirectory,
+    commitOid,
+    runId: accepted.runId,
+    candidateCommit,
+    candidateClosed,
+    closeError,
+    operationCount: operations.length,
+  };
 }

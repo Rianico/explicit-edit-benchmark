@@ -122,7 +122,7 @@ async function accept(args) {
   const candidateRevision = value(args, "--candidate");
   const dryRun = args.includes("--dry-run");
   if (!repository || !candidateRevision)
-    throw Error("benchmark accept requires --repository OWNER/DATASET --candidate PR_OR_REF");
+    throw Error("benchmark accept requires --repository OWNER/DATASET --candidate PR_NUMBER");
   const workspaceDirectory = path.resolve(
     value(args, "--workspace") ?? path.join(".tmp", `hf-accept-${Date.now()}`),
   );
@@ -135,9 +135,28 @@ async function accept(args) {
       dryRun,
     });
     console.log(
-      result.commitOid
-        ? `Accepted ${result.runId} in ${result.commitOid}`
-        : `Validated ${result.runId}; dry run, nothing published`,
+      result.duplicate
+        ? `Observation ${result.runId} was already accepted on Dataset main`
+        : result.commitOid
+          ? `Accepted ${result.runId} in ${result.commitOid}`
+          : `Validated ${result.runId}; dry run, nothing published`,
+    );
+    if (result.commitOid)
+      console.log(
+        result.candidateClosed
+          ? `Closed candidate PR with an acceptance receipt`
+          : `Warning: candidate PR could not be closed: ${result.closeError}`,
+      );
+    console.log(
+      JSON.stringify({
+        runId: result.runId,
+        commitOid: result.commitOid,
+        candidateClosed: result.candidateClosed ?? null,
+        closeError: result.closeError ?? null,
+        operationCount: result.operationCount,
+        duplicate: result.duplicate ?? false,
+        dryRun,
+      }),
     );
   } finally {
     await rm(workspaceDirectory, { recursive: true, force: true });
@@ -147,7 +166,7 @@ async function accept(args) {
 const [command, ...args] = process.argv.slice(2);
 if (!command || ["-h", "--help", "help"].includes(command)) {
   console.log(
-    `Usage: npm run benchmark -- COMMAND\n\nCommands:\n  init [--output FILE]\n  check --config FILE\n  run (--official | --local) --harness ID --model ID [OPTIONS]\n  raw-run RUNNER_OPTIONS...\n  export RUN_DIRECTORY [--output DIRECTORY]\n  inspect NORMALIZED_DIRECTORY\n  report NORMALIZED_DIRECTORY [--output DIRECTORY]\n  dataset --output DIRECTORY NORMALIZED_DIRECTORY [...]\n  submit NORMALIZED_DIRECTORY --repository OWNER/DATASET --metadata FILE\n  accept --repository OWNER/DATASET --candidate PR_OR_REF [--workspace DIRECTORY] [--dry-run]`,
+    `Usage: npm run benchmark -- COMMAND\n\nCommands:\n  init [--output FILE]\n  check --config FILE\n  run (--official | --local) --harness ID --model ID [OPTIONS]\n  raw-run RUNNER_OPTIONS...\n  export RUN_DIRECTORY [--output DIRECTORY]\n  inspect NORMALIZED_DIRECTORY\n  report NORMALIZED_DIRECTORY [--output DIRECTORY]\n  dataset --output DIRECTORY NORMALIZED_DIRECTORY [...]\n  submit NORMALIZED_DIRECTORY --repository OWNER/DATASET --metadata FILE\n  accept --repository OWNER/DATASET --candidate PR_NUMBER [--workspace DIRECTORY] [--dry-run]`,
   );
 } else if (command === "init") await init(args);
 else if (command === "check") await check(args);
