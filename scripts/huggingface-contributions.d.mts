@@ -3,7 +3,11 @@ import type { PublicDatasetIndex } from "./build-public-dataset.mjs";
 export interface HuggingFaceContributionHub {
   listCommits(options: unknown): AsyncIterable<{ oid: string }>;
   listFiles(options: unknown): AsyncIterable<{ path: string; type?: string }>;
-  snapshotDownload(options: { revision: string; [key: string]: unknown }): Promise<string>;
+  downloadFile(options: {
+    revision: string;
+    path: string;
+    [key: string]: unknown;
+  }): Promise<Blob | null>;
   uploadFiles(options: Record<string, unknown>): Promise<{
     pullRequestUrl?: string;
     commit: { oid: string };
@@ -37,17 +41,35 @@ export function submitHuggingFaceCandidate(options: SubmitHuggingFaceCandidateOp
   commitOid: string;
 }>;
 
+/** Download only the immutable files belonging to one ordinary Dataset candidate. */
+export function downloadHuggingFaceCandidate(options: {
+  hub: Pick<HuggingFaceContributionHub, "downloadFile">;
+  repo: unknown;
+  repository: string;
+  candidateNumber: string | number;
+  accessToken: string;
+  directory: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ candidateCommit: string; runId: string }>;
+
+/** Post the acceptance receipt and close a materialized Dataset candidate. */
+export function closeHuggingFaceCandidate(
+  repository: string,
+  candidateNumber: number,
+  token: string,
+  receipt: string,
+  fetchImpl?: typeof fetch,
+): Promise<void>;
 export interface MaterializeHuggingFaceOptions {
   repository: string;
   accessToken?: string;
   workspaceDirectory: string;
-  hub?: Pick<
-    HuggingFaceContributionHub,
-    "commit" | "listCommits" | "listFiles" | "snapshotDownload"
-  >;
+  hub?: Pick<HuggingFaceContributionHub, "commit" | "downloadFile" | "listCommits" | "listFiles">;
+  fetchImpl?: typeof fetch;
+  close?: typeof closeHuggingFaceCandidate;
 }
 
-/** Accept one HF candidate against current main and atomically publish a complete rebuilt dataset. */
+/** Validate one candidate and append only its source, shards, and updated compact views. */
 export function acceptHuggingFaceCandidate(
   options: MaterializeHuggingFaceOptions & { candidateRevision: string; dryRun?: boolean },
 ): Promise<{
@@ -55,4 +77,9 @@ export function acceptHuggingFaceCandidate(
   outputDirectory: string;
   commitOid: string | null;
   runId: string;
+  candidateCommit: string;
+  operationCount: number;
+  candidateClosed?: boolean;
+  closeError?: string | null;
+  duplicate?: boolean;
 }>;

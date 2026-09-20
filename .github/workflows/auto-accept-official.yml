@@ -1,5 +1,5 @@
 ---
-name: Auto-accept official observations
+name: Auto-accept benchmark observations
 
 "on":
   schedule:
@@ -156,6 +156,54 @@ jobs:
           tail --lines=1 "$output" > "$result"
           jq --exit-status . "$result" > /dev/null
 
+      - name: Validate and accept community candidates
+        id: community
+        if: >-
+          steps.gate.outputs.enabled == 'true' &&
+          !inputs.oidc_check_only &&
+          (github.event_name == 'schedule' ||
+            (github.event_name == 'workflow_dispatch' &&
+              inputs.candidate == '' &&
+              !inputs.rebuild_only &&
+              !inputs.dry_run))
+        env:
+          DATASET_REPOSITORY: alexshpunt/explicit-edit-benchmark
+          MAX_CANDIDATES: "4"
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/community-result.json"
+          output="$RUNNER_TEMP/community-output.log"
+          node scripts/community-acceptance-cli.mjs | tee "$output"
+          tail --lines=1 "$output" > "$result"
+          jq --exit-status . "$result" > /dev/null
+
+      - name: Summarize community acceptance
+        if: always() && steps.community.outcome != 'skipped'
+        run: |
+          result="$RUNNER_TEMP/community-result.json"
+          if [[ ! -s "$result" ]]; then
+            echo "## Community acceptance failed before producing a verdict" >> \
+              "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          jq --raw-output '
+            "## Community acceptance\n" +
+            "- discovered: " + ((.candidates // 0) | tostring) + "\n" +
+            "- accepted/already accepted: " +
+              ((.accepted // []) | length | tostring) + "\n" +
+            "- rejected: " + ((.rejected // []) | length | tostring) + "\n" +
+            "- deferred: " + ((.deferred // []) | length | tostring) + "\n" +
+            "- candidate PRs closed with receipts: " +
+              ([.accepted[] | select(.candidateClosed == true)] | length | tostring)
+          ' "$result" >> "$GITHUB_STEP_SUMMARY"
+          rejected=$(jq '.rejected | length' "$result")
+          close_failures=$(jq '[.accepted[] | select(.candidateClosed == false)] | length' "$result")
+          if (( rejected > 0 )); then
+            echo "::warning::$rejected community candidate(s) need contributor correction."
+          fi
+          if (( close_failures > 0 )); then
+            echo "::warning::$close_failures accepted candidate PR(s) could not be closed."
+          fi
       - name: Summarize acceptance batch
         if: always() && steps.acceptance.outcome != 'skipped'
         run: |

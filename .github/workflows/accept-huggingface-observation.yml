@@ -9,11 +9,11 @@ name: Accept Hugging Face observation
         required: true
         type: string
       candidate_ref:
-        description: Hugging Face pull request number or revision
+        description: Hugging Face pull request number
         required: true
         type: string
       dry_run:
-        description: Validate and rebuild without publishing
+        description: Validate and prepare the append without publishing
         required: false
         default: false
         type: boolean
@@ -35,12 +35,14 @@ jobs:
         with:
           node-version: "24"
       - run: npm ci
-      - name: Validate, materialize, and publish the candidate
+      - name: Validate, append, and publish the candidate
+        id: acceptance
         env:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
           DATASET_REPOSITORY: ${{ inputs.dataset_repository }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -euo pipefail
           args=(
             npm run benchmark -- accept
             --repository "$DATASET_REPOSITORY"
@@ -49,4 +51,29 @@ jobs:
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          "${args[@]}"
+          output="$RUNNER_TEMP/community-acceptance.log"
+          "${args[@]}" | tee "$output"
+          tail --lines=1 "$output" > "$RUNNER_TEMP/community-acceptance.json"
+          jq --exit-status . "$RUNNER_TEMP/community-acceptance.json" > /dev/null
+
+      - name: Summarize candidate acceptance
+        if: always() && steps.acceptance.outcome != 'skipped'
+        run: |
+          result="$RUNNER_TEMP/community-acceptance.json"
+          if [[ ! -s "$result" ]]; then
+            echo "## Community acceptance failed before producing a verdict" >> \
+              "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          jq --raw-output '
+            "## Community acceptance\n" +
+            "- run: `" + .runId + "`\n" +
+            "- dry run: " + (.dryRun | tostring) + "\n" +
+            "- Dataset commit: `" + (.commitOid // "none") + "`\n" +
+            "- candidate PR closed with receipt: " +
+              ((.candidateClosed // false) | tostring) + "\n" +
+            "- files added or updated: " + ((.operationCount // 0) | tostring)
+          ' "$result" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$(jq --raw-output .candidateClosed "$result")" = "false" ]]; then
+            echo "::warning::Dataset commit succeeded, but the candidate PR could not be closed."
+          fi

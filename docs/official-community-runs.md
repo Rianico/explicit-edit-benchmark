@@ -8,17 +8,19 @@ The caller invokes `official-run.yml` at a full approved commit SHA. Model execu
 
 After inference succeeds, the workflow attests the exact result archive and starts submit-only delivery. Hugging Face downtime does not require new model calls: run **Resubmit existing official result** with the original GitHub run ID and attempt. Repeated delivery of the same execution and digest is a no-op; a conflicting digest is rejected.
 
-A scheduled workflow in this repository verifies official candidates and publishes accepted observations automatically. Score does not affect admission. Failures and timeouts are observations. The Dataset retains the signed archive, attestation, execution identity, source workflow, policy identity, and acceptance receipt.
+A scheduled workflow in this repository validates both official and ordinary candidates and publishes structurally valid observations automatically. Score does not affect admission. Failures and timeouts are observations. Official candidates also require the approved workflow proof and retain the signed archive, attestation, execution identity, source workflow, policy identity, and acceptance receipt.
 
-Ordinary local submissions remain supported. They are marked `unverified`, while approved GitHub workflow results are marked `verified`. Both stay visible in the same Dataset. Local development may use custom configs and local extensions; those inputs are deliberately unavailable in official mode. New official adapters require a reviewed code pull request and a real GitHub smoke.
+Ordinary local submissions are marked `unverified`, while approved GitHub workflow results are marked `verified`. Both stay visible and count in the combined Dataset views. After a successful Dataset commit, automation posts an acceptance receipt on the candidate pull request and closes it. It does not use Hugging Face's merge action because that would copy the temporary `candidates/` directory into Dataset `main` alongside the materialized accepted source.
+
+Local development may use custom configs and local extensions; those inputs are deliberately unavailable in official mode. New official adapters require a reviewed code pull request and a real GitHub smoke.
 
 Verification proves that the exact archive came from the approved workflow identity. It does not prove the provider's private model implementation, prevent hidden unrelated runs, or review every third-party package version for benchmark awareness.
 
 ## Operations and recovery
 
-Production acceptance runs four times an hour and processes at most four official candidates in one serialized batch. The GitHub repository variable `OFFICIAL_AUTO_ACCEPT_ENABLED` is the kill switch. Set it to `false` to stop new accepts; verification data already published in Hugging Face is not changed. Maintenance-only `dry_run`, `rebuild_only`, and OIDC checks remain available through manual dispatch while the switch is off.
+Production acceptance runs four times an hour. In one serialized workflow it processes at most four official candidates, then at most four ordinary candidates. The GitHub repository variable `OFFICIAL_AUTO_ACCEPT_ENABLED` is the kill switch. Set it to `false` to stop new accepts; verification data already published in Hugging Face is not changed. Maintenance-only `dry_run`, `rebuild_only`, and OIDC checks remain available through manual dispatch while the switch is off.
 
-Use **Auto-accept official observations → Run workflow → dry_run** before changing release policy, the verifier, or the official registry. A dry run verifies the immutable candidate revision and builds the proposed append locally, but creates no Dataset commit and does not close the candidate. The Action summary reports discovered, accepted or duplicate, rejected, deferred, dry-run state, and the Dataset commit when one was created.
+Use **Auto-accept benchmark observations → Run workflow → dry_run** before changing release policy, the verifier, or the official registry. A dry run verifies the immutable candidate revision and builds the proposed append locally, but creates no Dataset commit and does not close the candidate. The Action summary reports discovered, accepted or duplicate, rejected, deferred, dry-run state, and the Dataset commit when one was created.
 
 Temporary Hub failures are deferred. The next scheduled batch reads the current Dataset head and retries the unchanged candidate without model calls. Publishing uses a parent-checked atomic commit; a concurrent Dataset update therefore fails closed and is retried from the new head on the next batch. Submit-only recovery always reuses the retained signed artifact and existing candidate when available.
 

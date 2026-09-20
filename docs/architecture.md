@@ -84,13 +84,15 @@ source/accepted/<submission-id>/
 
 Acceptance publishes everything in one parent-checked commit:
 
-1. Download current Dataset `main` and the candidate revision.
+1. Download the three compact state files from Dataset `main` and the seven files in the immutable candidate bundle.
 2. Validate schema v1, hashes, foreign keys, run identity, safe metadata, task-set identity, and compatibility.
-3. Add the reviewed bundle to `source/accepted/`.
-4. Rebuild every generated view from all accepted bundles.
-5. Commit the evidence and the views together.
+3. Add the bundle to `source/accepted/` and create one new compressed shard per table.
+4. Append the run to `aggregate-state.json` and regenerate only the compact indexes, scores, views, badges, and Dataset card.
+5. Commit the new evidence and updated projections together.
 
-The official Score is:
+Historical source bundles and historical table shards are not downloaded or rewritten during normal acceptance. A full source download and rebuild exists only as an explicit recovery operation.
+
+The benchmark Score is:
 
 ```text
 coverage × (0.75 × first exact rate + 0.25 × final exact rate)

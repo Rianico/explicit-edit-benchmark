@@ -1,35 +1,42 @@
 ---
 name: review-benchmark-candidate
-description: Review a benchmark pull request, validate it, and accept or merge it only after the user confirms. Use when reviewing a Hugging Face Dataset candidate opened by a contributor, or a code pull request to this repository.
-compatibility: Linux, Node.js 24+, an authenticated Hugging Face login or HF_TOKEN, and this repository's installed dependencies.
+description: Review benchmark Dataset candidates or code pull requests. Use when checking a Hugging Face result contribution, investigating acceptance, or reviewing a code change to this repository.
+compatibility: Linux, Node.js 24+, GitHub CLI access, and this repository's installed dependencies.
 ---
 
 # Review a benchmark pull request
 
-## Recognise what you are reviewing
+## Identify the pull request
 
-- **Ordinary result candidate** — a Hugging Face Dataset pull request containing one normalized `candidates/<run-id>/` directory. It is unverified and follows the manual review below.
-- **Official result candidate** — a Dataset pull request under `candidates/official/<executionId>/` containing the signed archive, attestation, and transport metadata. Repository automation verifies and accepts it by policy; do not manually approve or reject it based on score.
-- **Code pull request** — a pull request on this GitHub repository: adapters, tasks, docs, or tooling. Merging it changes the benchmark itself.
+- **Ordinary result candidate** — a Hugging Face Dataset pull request with one normalized `candidates/<run-id>/` bundle. It becomes an `unverified` observation.
+- **Official result candidate** — a Dataset pull request under `candidates/official/<execution-id>/` with a signed archive, attestation, and transport metadata. It becomes `verified` only after proof validation.
+- **Code pull request** — a pull request to this GitHub repository. Merging it changes the benchmark or its automation.
 
-Never manually accept an ordinary candidate or merge code before the user confirms. Official result candidates are handled by automatic policy and do not need a human score review.
+Dataset admission is automatic and never depends on score. A failed task, timeout, or low score is valid evidence. Reject only malformed, unsafe, conflicting, or unverifiable data.
 
-## Read it
+## Dataset candidates
 
-For a candidate, download the pull request revision first:
+Do not download a Dataset snapshot or candidate revision to the maintainer workstation. Do not run production acceptance locally.
 
-```sh
-hf download alexshpunt/explicit-edit-benchmark --repo-type dataset \
-  --revision refs/pr/PR_NUMBER --local-dir .tmp/candidate
-```
+The scheduled **Auto-accept benchmark observations** workflow runs four times an hour. It processes official candidates first and ordinary candidates second. Each candidate is handled serially against the current Dataset head.
 
-Read, in this order: `candidates/<run-id>/submission.json` (who sent it, purpose), `manifest.json` (contract, task-set hash, counts, policy), `profiles.jsonl` (agent, model, provider, harness, exact versions, reasoning), and skim `trials.jsonl` for the first and final exact results.
+Normal acceptance is append-only:
 
-For a code pull request, read the diff and the touched files. Read `docs/benchmark-automation.md` when the change touches the schema, the aggregation, or the Dataset views.
+1. download `source/index.json`, `dataset-index.json`, and `aggregate-state.json` from current `main`;
+2. download only the immutable files belonging to the candidate;
+3. validate the normalized bundle, identity, hashes, foreign keys, safe metadata, and task-set compatibility;
+4. add one retained source bundle and one new shard per table;
+5. append the aggregate state and regenerate only compact views, scores, badges, indexes, and the Dataset card;
+6. publish one parent-checked commit;
+7. post an acceptance receipt with the run ID and Dataset commit, then close the candidate pull request.
 
-## Validate
+The workflow closes the pull request instead of using Hugging Face's merge action. Merging the raw PR would copy the temporary `candidates/` directory into Dataset `main`, which is not the accepted storage layout.
 
-For a candidate, run the full acceptance path on GitHub Actions without publishing anything:
+If acceptance succeeds but the receipt or close request fails, keep the Dataset commit. Report the delivery warning and let the next scheduled pass reconcile the already accepted run and close the PR.
+
+### Manual investigation
+
+Use a server-side dry run only when the user asks to investigate a specific ordinary candidate:
 
 ```sh
 gh workflow run accept-huggingface-observation.yml \
@@ -38,49 +45,42 @@ gh workflow run accept-huggingface-observation.yml \
   -f dry_run=true
 ```
 
-Do not download or validate a Dataset candidate on the maintainer workstation. Record the workflow URL and wait for it to finish. The workflow downloads current `main` and the candidate revision, runs the normalized validator and the strict ingestion validator, appends the candidate to a temporary store, rebuilds every generated view, and fails if an accepted observation would be dropped or rewritten. Its log ends with `Validated …; dry run, nothing published` and makes no Dataset commit.
+Run it once, record the workflow URL, and wait for it to finish. Do not dispatch several candidates in parallel because Dataset acceptance uses one serialization group.
 
-Also check by hand, because these are judgement calls:
+A dry run must not publish or close the candidate. Its summary reports the run ID and the small number of files that a real append would add or update.
 
-- the purpose field matches what the run actually is;
-- the `clientRunId` and run id are new, and one pull request carries one run;
-- the task-set hash equals the task set of this repository (`npm run bench:list` gives the tasks);
-- identities are complete and truthful: agent, model, provider, harness, exact versions, reasoning;
-- failures and timeouts are still in the result, not replaced by retries that only succeeded;
-- no credentials, machine paths, prompts, raw commands, or command output anywhere in the bundle;
-- the tools the run used match the harness it claims: compare `tool-calls.jsonl` with the harness's own tools, because a misconfigured extension silently falls back to the agent's built-in tools and still passes every task.
+Use production manual dispatch only to recover a candidate that cannot wait for the next scheduled pass and only when the user explicitly asks:
 
-For a code pull request, run:
+```sh
+gh workflow run accept-huggingface-observation.yml \
+  -f dataset_repository=alexshpunt/explicit-edit-benchmark \
+  -f candidate_ref=PR_NUMBER
+```
+
+Never retry a `429` immediately. Leave the candidate open for the next scheduled pass.
+
+A full Dataset download and rebuild is a recovery operation for a missing or invalid aggregate state. It is not candidate validation and must not run during ordinary acceptance.
+
+## Code pull requests
+
+Read the diff and touched files. Read `docs/benchmark-automation.md` when a change touches schema, aggregation, acceptance, or Dataset views. Run:
 
 ```sh
 npm run check
 ```
 
-When the diff adds a harness adapter, also apply the checks in `add-benchmark-harness`.
+When the diff adds a harness adapter, also apply `add-benchmark-harness`.
 
-## Report before you ask
+Report what changed, risks, and verification results. Ask the user before merging a code pull request. Merge it through GitHub only after CI passes.
 
-Tell the user what you found, in plain words: the kind of pull request, who sent it, the claimed identity, how many trials and tasks it covers, the first and final exact rates, what the dry run reported, and anything unverifiable or wrong. Quote the commands you ran so the claims can be rechecked.
+## What to report
 
-## Ask, then apply the decision
+For Dataset candidates, report:
 
-Ask the user with the ask tool before any write, and offer three outcomes: accept or merge, request changes, reject. Keep the question short and do not bundle it with unrelated questions. Do not skip it because validation passed, and do not merge on your own initiative.
+- candidate number and contributor;
+- claimed model, provider, harness, versions, and reasoning when available;
+- whether it was accepted, rejected, or deferred;
+- Dataset commit and workflow URL;
+- whether the acceptance receipt was posted and the pull request was closed.
 
-- **Accept an ordinary candidate**: dispatch `.github/workflows/accept-huggingface-observation.yml` after the user confirms. Do not run a production `accept` command locally. Use:
-
-  ```sh
-  gh workflow run accept-huggingface-observation.yml \
-    -f dataset_repository=alexshpunt/explicit-edit-benchmark \
-    -f candidate_ref=PR_NUMBER
-  ```
-
-  Record the workflow URL, wait for it to finish, and report the accepted Dataset commit. The workflow owns the maintainer token, serialization, validation, rebuild, and publication.
-- **Merge a code pull request**: merge in GitHub once CI is green. Report the merge commit.
-- **Request changes**: write the review comment with the exact failing evidence.
-- **Reject**: explain why and leave the branch open.
-
-## After acceptance
-
-The accepted commit rebuilds `source/`, the compressed tables, the leaderboard, the views, and the badges in one parent-checked operation. Verify that the published `dataset-index.json` hashes match the published files and that `https://alexshpunt-benchmark-explorer.static.hf.space` still loads with the new observation.
-
-Keep the local workspace out of the repository, and never hand-edit a normalized row to make a candidate pass. Fix the source and rerun instead.
+For rejected candidates, leave the pull request open and give the contributor the exact validation error. Never edit normalized evidence to make it pass.
