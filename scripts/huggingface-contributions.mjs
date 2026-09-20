@@ -329,6 +329,7 @@ export async function acceptHuggingFaceCandidate({
   candidateRevision,
   accessToken,
   workspaceDirectory,
+  discussionAccessToken,
   dryRun = false,
   hub = defaultHub,
   fetchImpl = fetch,
@@ -337,6 +338,7 @@ export async function acceptHuggingFaceCandidate({
   const repo = datasetRepository(repository);
   const token = await resolveHuggingFaceToken({ accessToken });
   if (!token) throw Error("HF_TOKEN is required to accept a Hugging Face candidate");
+  const discussionToken = discussionAccessToken ?? token;
   const candidateNumber = String(candidateRevision);
   if (!/^\d+$/.test(candidateNumber)) throw Error("Candidate number must be numeric");
   const parentCommit = await headCommit(hub, repo, token);
@@ -387,7 +389,7 @@ export async function acceptHuggingFaceCandidate({
       await close(
         repository,
         Number(candidateNumber),
-        token,
+        discussionToken,
         `Community observation ${candidateRunId} was already accepted on Dataset main at ${parentCommit}.`,
         fetchImpl,
       );
@@ -506,7 +508,7 @@ export async function acceptHuggingFaceCandidate({
     await close(
       repository,
       Number(candidateNumber),
-      token,
+      discussionToken,
       `Accepted community observation ${accepted.runId} in Dataset commit ${commitOid}.`,
       fetchImpl,
     );

@@ -213,6 +213,7 @@ export async function acceptOfficialCandidates({
   candidateNumbers,
   accessToken,
   workspaceDirectory,
+  discussionAccessToken,
   hub = defaultHub,
   attestationVerifier = verifyAttestation,
   close = closeCandidate,
@@ -221,6 +222,7 @@ export async function acceptOfficialCandidates({
   if (!REPOSITORY.test(repository ?? "")) throw Error("Dataset repository must be owner/name");
   const token = await resolveHuggingFaceToken({ accessToken });
   if (!token) throw Error("HF_TOKEN is required to accept official candidates");
+  const discussionToken = discussionAccessToken ?? token;
   const repo = { type: "dataset", name: repository };
   const parentCommit = await headCommit(hub, repo, token);
   const workspace = path.resolve(workspaceDirectory);
@@ -444,7 +446,7 @@ export async function acceptOfficialCandidates({
       const receipt = item.duplicate
         ? `Execution ${item.executionId} was already accepted before Dataset commit ${commitOid}.`
         : `Accepted verified execution ${item.executionId} in Dataset commit ${commitOid}.`;
-      await close(repository, item.candidate, token, receipt);
+      await close(repository, item.candidate, discussionToken, receipt);
       item.candidateClosed = true;
     } catch (error) {
       item.candidateClosed = false;

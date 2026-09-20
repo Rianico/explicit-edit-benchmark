@@ -132,6 +132,7 @@ async function accept(args) {
       candidateRevision,
       accessToken: process.env.HF_TOKEN,
       workspaceDirectory,
+      discussionAccessToken: process.env.HF_DISCUSSION_TOKEN,
       dryRun,
     });
     console.log(

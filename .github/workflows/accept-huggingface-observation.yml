@@ -41,6 +41,7 @@ jobs:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
           DATASET_REPOSITORY: ${{ inputs.dataset_repository }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_DISCUSSION_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
           args=(

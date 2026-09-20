@@ -69,6 +69,7 @@ export function closeHuggingFaceCandidate(
 export interface MaterializeHuggingFaceOptions {
   repository: string;
   accessToken?: string;
+  discussionAccessToken?: string;
   workspaceDirectory: string;
   hub?: Pick<HuggingFaceContributionHub, "commit" | "downloadFile" | "listCommits" | "listFiles">;
   fetchImpl?: typeof fetch;
