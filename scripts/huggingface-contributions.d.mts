@@ -41,6 +41,12 @@ export function submitHuggingFaceCandidate(options: SubmitHuggingFaceCandidateOp
   commitOid: string;
 }>;
 
+/** Fail closed unless compact source, Dataset, and aggregate indexes describe the same runs. */
+export function verifyIncrementalDatasetState(
+  sourceIndex: unknown,
+  datasetIndex: PublicDatasetIndex,
+  aggregateState: unknown,
+): void;
 /** Download only the immutable files belonging to one ordinary Dataset candidate. */
 export function downloadHuggingFaceCandidate(options: {
   hub: Pick<HuggingFaceContributionHub, "downloadFile">;

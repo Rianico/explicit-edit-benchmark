@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { gunzipSync } from "node:zlib";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -195,6 +197,35 @@ function parseJsonLines(content) {
     .map((line) => JSON.parse(line));
 }
 
+async function parseCompressedJsonLines(filePath) {
+  return parseJsonLines(gunzipSync(await readFile(filePath)).toString("utf8"));
+}
+
+async function canonicalizeCandidateManifest(candidateDirectory) {
+  const manifestFile = path.join(candidateDirectory, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
+}
+
+/** Fail closed unless compact source, Dataset, and aggregate indexes describe the same runs. */
+export function verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState) {
+  verifyAggregateState(aggregateState, sourceIndex);
+  const sources = sourceIndex.submissions ?? [];
+  const runs = datasetIndex.runs ?? [];
+  const contributions = aggregateState.contributions ?? [];
+  if (sources.length !== runs.length || runs.length !== contributions.length)
+    throw Error("Incremental Dataset state has different run counts");
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index];
+    const run = runs[index];
+    const aggregateRun = contributions[index].run;
+    if (source.runId !== run.runId || source.submissionId !== run.submissionId)
+      throw Error("Dataset index does not match source index");
+    if (!isDeepStrictEqual(aggregateRun, run))
+      throw Error("Dataset index does not match aggregate state");
+  }
+}
+
 async function downloadJson(hub, repo, revision, accessToken, filePath) {
   const blob = await hub.downloadFile({ repo, revision, accessToken, path: filePath });
   if (!blob) throw Error(`Dataset is missing ${filePath}`);
@@ -318,7 +349,7 @@ export async function acceptHuggingFaceCandidate({
     downloadJson(hub, repo, parentCommit, token, "dataset-index.json"),
     downloadJson(hub, repo, parentCommit, token, "aggregate-state.json"),
   ]);
-  verifyAggregateState(aggregateState, sourceIndex);
+  verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState);
 
   const outputDirectory = path.join(workspace, "dataset");
   const candidate = path.join(workspace, "candidate");
@@ -331,6 +362,7 @@ export async function acceptHuggingFaceCandidate({
     directory: candidate,
     fetchImpl,
   });
+  await canonicalizeCandidateManifest(candidate);
   const runOutput = path.join(workspace, "run");
   const single = await buildPublicDataset(runOutput, [candidate]);
   if (single.runs[0].runId !== candidateRunId)
@@ -395,17 +427,17 @@ export async function acceptHuggingFaceCandidate({
     definitions: sourceMetadata.definitions,
   };
   const evidence = {
-    profiles: parseJsonLines(await readFile(path.join(candidate, "profiles.jsonl"), "utf8")).map(
-      (row) => ({ runId: accepted.runId, ...row }),
+    profiles: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "profiles", `${accepted.runId}.jsonl.gz`),
     ),
-    trials: parseJsonLines(await readFile(path.join(candidate, "trials.jsonl"), "utf8")).map(
-      (row) => ({ runId: accepted.runId, ...row }),
+    trials: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "trials", `${accepted.runId}.jsonl.gz`),
     ),
-    rounds: parseJsonLines(await readFile(path.join(candidate, "rounds.jsonl"), "utf8")).map(
-      (row) => ({ runId: accepted.runId, ...row }),
+    rounds: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "rounds", `${accepted.runId}.jsonl.gz`),
     ),
-    toolCalls: parseJsonLines(await readFile(path.join(candidate, "tool-calls.jsonl"), "utf8")).map(
-      (row) => ({ runId: accepted.runId, ...row }),
+    toolCalls: await parseCompressedJsonLines(
+      path.join(runOutput, "data", "tool-calls", `${accepted.runId}.jsonl.gz`),
     ),
   };
   const nextAggregateState = appendAggregateRun(aggregateState, {

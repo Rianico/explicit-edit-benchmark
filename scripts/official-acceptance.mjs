@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { commit, downloadFile, listCommits, listFiles, snapshotDownload } from "@huggingface/hub";
 import { ingestSubmission } from "./benchmark-ingestion.mjs";
 import { buildSubmission } from "./benchmark-submission.mjs";
@@ -12,12 +13,13 @@ import {
   buildPublicDataset,
   buildPublicDatasetFromStore,
 } from "./build-public-dataset.mjs";
-import { appendAggregateRun, verifyAggregateState } from "./aggregate-state.mjs";
+import { appendAggregateRun } from "./aggregate-state.mjs";
 import {
   assertPreserved,
   headCommit,
   publishDirectory,
   readDatasetIndex,
+  verifyIncrementalDatasetState,
 } from "./huggingface-contributions.mjs";
 import { resolveHuggingFaceToken } from "./huggingface-auth.mjs";
 import { OfficialVerificationError, officialVerdict } from "./official-verifier.mjs";
@@ -131,6 +133,10 @@ function parseJsonLines(content) {
     .map((line) => JSON.parse(line));
 }
 
+async function parseCompressedJsonLines(filePath) {
+  return parseJsonLines(gunzipSync(await readFile(filePath)).toString("utf8"));
+}
+
 async function downloadJson(hub, repo, revision, accessToken, filePath) {
   const blob = await hub.downloadFile({ repo, revision, accessToken, path: filePath });
   if (!blob) throw Error(`Dataset is missing ${filePath}`);
@@ -157,9 +163,10 @@ export async function incrementalCommitOperations(root, directory = root) {
 export function isDeferredHubError(error) {
   const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
   return (
+    status === 409 ||
     status === 429 ||
     (status >= 500 && status <= 599) ||
-    /\b(?:429|5\d\d)\b/u.test(String(error?.message ?? error))
+    /\b(?:409|429|5\d\d)\b/u.test(String(error?.message ?? error))
   );
 }
 
@@ -229,7 +236,7 @@ export async function acceptOfficialCandidates({
       downloadJson(hub, repo, parentCommit, token, "dataset-index.json"),
       downloadJson(hub, repo, parentCommit, token, "aggregate-state.json"),
     ]);
-    verifyAggregateState(aggregateState, sourceIndex);
+    verifyIncrementalDatasetState(sourceIndex, datasetIndex, aggregateState);
   } catch (error) {
     return {
       parentCommit,
@@ -278,9 +285,9 @@ export async function acceptOfficialCandidates({
         attestationVerifier,
       });
       const normalized = path.join(prepared.extracted, "normalized");
-      const normalizedManifest = JSON.parse(
-        await readFile(path.join(normalized, "manifest.json"), "utf8"),
-      );
+      const normalizedManifestFile = path.join(normalized, "manifest.json");
+      const normalizedManifest = JSON.parse(await readFile(normalizedManifestFile, "utf8"));
+      await writeFile(normalizedManifestFile, JSON.stringify(normalizedManifest, null, 2) + "\n");
       const runId = prepared.verified.manifest.executionIdentity.executionId;
       const metadata = await submissionMetadata(normalized, runId);
       metadata.purpose = "official";
@@ -326,18 +333,18 @@ export async function acceptOfficialCandidates({
         submissions: sourceIndex.submissions.slice(0, -1),
       };
       const evidence = {
-        profiles: parseJsonLines(
-          await readFile(path.join(normalized, "profiles.jsonl"), "utf8"),
-        ).map((row) => ({ runId: normalizedManifest.runId, ...row })),
-        trials: parseJsonLines(await readFile(path.join(normalized, "trials.jsonl"), "utf8")).map(
-          (row) => ({ runId: normalizedManifest.runId, ...row }),
+        profiles: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "profiles", `${normalizedManifest.runId}.jsonl.gz`),
         ),
-        rounds: parseJsonLines(await readFile(path.join(normalized, "rounds.jsonl"), "utf8")).map(
-          (row) => ({ runId: normalizedManifest.runId, ...row }),
+        trials: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "trials", `${normalizedManifest.runId}.jsonl.gz`),
         ),
-        toolCalls: parseJsonLines(
-          await readFile(path.join(normalized, "tool-calls.jsonl"), "utf8"),
-        ).map((row) => ({ runId: normalizedManifest.runId, ...row })),
+        rounds: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "rounds", `${normalizedManifest.runId}.jsonl.gz`),
+        ),
+        toolCalls: await parseCompressedJsonLines(
+          path.join(runOutput, "data", "tool-calls", `${normalizedManifest.runId}.jsonl.gz`),
+        ),
       };
       aggregateState = appendAggregateRun(aggregateState, {
         previousSourceIndex,

@@ -3,14 +3,47 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createAggregateState } from "../../scripts/aggregate-state.mjs";
+import { verifyIncrementalDatasetState } from "../../scripts/huggingface-contributions.mjs";
 import {
   incrementalCommitOperations,
   isDeferredHubError,
   listOpenOfficialCandidates,
 } from "../../scripts/official-acceptance.mjs";
 
+test("incremental acceptance requires source, Dataset, and aggregate state to agree", () => {
+  const sourceIndex = { submissions: [{ runId: "run-1", submissionId: "submission-1" }] };
+  const run = {
+    runId: "run-1",
+    submissionId: "submission-1",
+    manifestSha256: "a".repeat(64),
+  };
+  const aggregateState = createAggregateState({
+    sourceIndex,
+    run,
+    profiles: [],
+    trials: [],
+    rounds: [],
+    toolCalls: [],
+  });
+
+  assert.equal(
+    verifyIncrementalDatasetState(sourceIndex, { runs: [run] }, aggregateState),
+    undefined,
+  );
+  assert.throws(
+    () =>
+      verifyIncrementalDatasetState(
+        sourceIndex,
+        { runs: [{ ...run, manifestSha256: "b".repeat(64) }] },
+        aggregateState,
+      ),
+    /Dataset index does not match aggregate state/,
+  );
+});
 test("only rate limits and server failures are deferred", () => {
   assert.equal(isDeferredHubError({ status: 429 }), true);
+  assert.equal(isDeferredHubError({ status: 409 }), true);
   assert.equal(isDeferredHubError({ response: { status: 503 } }), true);
   assert.equal(isDeferredHubError(Error("Hub request failed (502)")), true);
   assert.equal(isDeferredHubError({ status: 401 }), false);
