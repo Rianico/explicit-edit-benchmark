@@ -29,14 +29,16 @@ For a code pull request, read the diff and the touched files. Read `docs/benchma
 
 ## Validate
 
-For a candidate, run the full acceptance path without publishing anything:
+For a candidate, run the full acceptance path on GitHub Actions without publishing anything:
 
 ```sh
-npm run benchmark -- accept --repository alexshpunt/explicit-edit-benchmark \
-  --candidate PR_NUMBER --dry-run
+gh workflow run accept-huggingface-observation.yml \
+  -f dataset_repository=alexshpunt/explicit-edit-benchmark \
+  -f candidate_ref=PR_NUMBER \
+  -f dry_run=true
 ```
 
-This downloads current `main` and the candidate revision, runs the normalized validator and the strict ingestion validator, appends the candidate to a temporary store, rebuilds every generated view, and fails if an accepted observation would be dropped or rewritten. It ends with `Validated …; dry run, nothing published` and makes no commit. Confirm the dataset head has not moved afterwards.
+Do not download or validate a Dataset candidate on the maintainer workstation. Record the workflow URL and wait for it to finish. The workflow downloads current `main` and the candidate revision, runs the normalized validator and the strict ingestion validator, appends the candidate to a temporary store, rebuilds every generated view, and fails if an accepted observation would be dropped or rewritten. Its log ends with `Validated …; dry run, nothing published` and makes no Dataset commit.
 
 Also check by hand, because these are judgement calls:
 
