@@ -12,6 +12,7 @@ const OMP_API_KEY_ENV = Object.freeze({
   zai: "ZAI_API_KEY",
   xiaomi: "XIAOMI_API_KEY",
   "opencode-go": "OPENCODE_API_KEY",
+  opencode: "OPENCODE_API_KEY",
 });
 async function privateJson(file, value) {
   await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
