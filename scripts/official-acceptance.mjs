@@ -316,7 +316,11 @@ export async function acceptOfficialCandidates({
       const submission = await buildSubmission(normalized, metadata);
       const result = await ingestSubmission(
         store,
-        { ownerId: prepared.verified.transport.producer.repository, verification: "verified" },
+        {
+          ownerId: prepared.verified.transport.producer.repository,
+          sourceRepository: prepared.verified.transport.producer.repository,
+          verification: "verified",
+        },
         submission,
       );
       if (!result.created) {
@@ -333,6 +337,11 @@ export async function acceptOfficialCandidates({
         ...single.runs[0],
         submissionId: sourceMetadata.submissionId,
         ownerId: sourceMetadata.ownerId,
+        ...(sourceMetadata.submittedBy ? { submittedBy: sourceMetadata.submittedBy } : {}),
+        ...(sourceMetadata.sourceRepository
+          ? { sourceRepository: sourceMetadata.sourceRepository }
+          : {}),
+        ...(sourceMetadata.submissionUrl ? { submissionUrl: sourceMetadata.submissionUrl } : {}),
         purpose: sourceMetadata.purpose,
         verification: "verified",
         definitions: sourceMetadata.definitions,

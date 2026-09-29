@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   canonicalizeModelProviderRows,
   completeRunEvidence,
+  datasetCommunityProjection,
   familyGroupScores,
   latestHarnessGroups,
   modelLeaderboard,
@@ -136,6 +137,50 @@ test("task-family groups use slices from globally complete configurations", () =
 
   assert.equal(groups.harnessFamily.harness.score, 0.75);
   assert.equal(groups.harnessFamily.harness.completeConfigurationCount, 1);
+});
+
+test("community projection credits only confirmed people and lists every accepted harness", () => {
+  const runs = [
+    {
+      runId: "run-a",
+      submittedBy: {
+        platform: "huggingface",
+        accountId: "alice",
+        profileUrl: "https://huggingface.co/alice",
+      },
+    },
+    { runId: "run-b", ownerId: "owner/repository" },
+    {
+      runId: "run-c",
+      submittedBy: {
+        platform: "github",
+        accountId: "bob",
+        profileUrl: "https://github.com/bob",
+      },
+    },
+  ];
+  const profiles = [
+    { runId: "run-a", configurationHash: "config-a", harnessFamily: "pi-default" },
+    { runId: "run-b", configurationHash: "config-b", harnessFamily: "custom" },
+    { runId: "run-c", configurationHash: "config-a", harnessFamily: "pi-default" },
+  ];
+
+  const projection = datasetCommunityProjection(runs, profiles);
+
+  assert.deepEqual(
+    projection.contributors.map((item) => [item.accountId, item.acceptedRuns, item.configurations]),
+    [
+      ["alice", 1, 1],
+      ["bob", 1, 1],
+    ],
+  );
+  assert.deepEqual(
+    projection.harnesses.map((item) => [item.harnessFamily, item.acceptedRuns]),
+    [
+      ["custom", 1],
+      ["pi-default", 2],
+    ],
+  );
 });
 
 test("badge score uses the latest complete harness version", () => {
