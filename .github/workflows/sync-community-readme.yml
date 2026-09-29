@@ -24,13 +24,13 @@ jobs:
           node-version: "24"
       - run: npm ci
       - run: node scripts/sync-readme-community.mjs
-      - run: npm exec oxfmt --write README.md
+      - run: npm exec oxfmt --write README.md badges.json
       - name: Open or update the generated README pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- README.md; then
+          if git diff --quiet -- README.md badges.json; then
             echo "README community tables are current." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -38,7 +38,7 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git checkout -B "$branch"
-          git add README.md
+          git add README.md badges.json
           git commit -m "docs: refresh community tables"
           git push --force origin "$branch"
           open_prs=$(gh pr list --head "$branch" --state open --json number --jq length)
