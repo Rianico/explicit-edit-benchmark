@@ -18,6 +18,7 @@
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.observations&label=observations&color=blue" alt="Accepted benchmark observations"></a>
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.models&label=models&color=blue" alt="Models in the benchmark dataset"></a>
   <a href="https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.configurations&label=configs&color=blue" alt="Configurations in the benchmark dataset"></a>
+  <a href="https://huggingface.co/spaces/alexshpunt/benchmark-explorer?view=harness"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fhuggingface.co%2Fdatasets%2Falexshpunt%2Fexplicit-edit-benchmark%2Fresolve%2Fmain%2Fsummary.json&query=%24.harnesses&label=harnesses&color=blue" alt="Accepted harness families"></a>
 </p>
 
 The tasks are small on purpose. None of them needs deep reasoning or domain knowledge: the agent finds the right text, changes it, and leaves every other byte as it was. That keeps the attention on what actually differs between setups, which is the model, the tools, and the harness around them.
@@ -31,6 +32,19 @@ There are 226 of them: replacements, insertions, deletions, copies, moves, large
 The benchmark grows with the people who run it. Run it on your own harness and configuration, publish the result, and it joins the same database and counts towards the statistics.
 
 There is room for more than this, too: longer and more involved edits are planned, closer to the work people do when they change software. Ideas are welcome as issues, pull requests are reviewed and merged when they help, and the author is open to discussing any of it.
+
+<!-- benchmark-community:start -->
+
+## Data contributors
+
+Thank you to everyone who shares benchmark observations. Your work makes this public comparison possible.
+
+_No confirmed contributor accounts have been published in the current Dataset projection yet._
+
+## Accepted harnesses
+
+_This table is refreshed from the Dataset after accepted observations are published._
+<!-- benchmark-community:end -->
 
 ## What you need
 

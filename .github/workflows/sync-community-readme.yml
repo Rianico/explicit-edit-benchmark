@@ -1,0 +1,46 @@
+---
+name: Sync community README tables
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-community-readme
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - run: node scripts/sync-readme-community.mjs
+      - name: Open or update the generated README pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- README.md; then
+            echo "README community tables are current." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch=automation/community-readme
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout -B "$branch"
+          git add README.md
+          git commit -m "docs: refresh community tables"
+          git push --force-with-lease origin "$branch"
+          gh pr view "$branch" >/dev/null 2>&1 || gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "docs: refresh community tables" \
+            --body "Refreshes the generated contributor and accepted-harness tables from the published Dataset projection."
