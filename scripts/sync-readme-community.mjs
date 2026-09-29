@@ -8,6 +8,12 @@ const END = "<!-- benchmark-community:end -->";
 const EXPLORER = "https://huggingface.co/spaces/alexshpunt/benchmark-explorer";
 const DEFAULT_COMMUNITY =
   "https://huggingface.co/datasets/alexshpunt/explicit-edit-benchmark/resolve/main/community.json";
+const DEFAULT_BADGES = path.resolve("badges.json");
+
+/** Public badge counts that combine Dataset contributors with the project author. */
+export function contributorBadgeData(community) {
+  return { contributors: (community.contributors ?? []).length + 1 };
+}
 
 /** Render the README sections shared with the generated Dataset card. */
 export function renderReadmeCommunity(community) {
@@ -57,11 +63,14 @@ export function syncReadmeCommunity(readme, community) {
 async function main() {
   const readmeFile = path.resolve(process.argv[2] ?? "README.md");
   const communityUrl = process.argv[3] ?? DEFAULT_COMMUNITY;
+  const badgesFile = path.resolve(process.argv[4] ?? DEFAULT_BADGES);
   const response = await fetch(communityUrl);
   if (!response.ok) throw Error(`Community projection download failed (${response.status})`);
+  const community = await response.json();
   const current = await readFile(readmeFile, "utf8");
-  const next = syncReadmeCommunity(current, await response.json());
+  const next = syncReadmeCommunity(current, community);
   if (next !== current) await writeFile(readmeFile, next);
+  await writeFile(badgesFile, `${JSON.stringify(contributorBadgeData(community), null, 2)}\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))

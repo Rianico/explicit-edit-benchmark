@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { syncReadmeCommunity } from "../../scripts/sync-readme-community.mjs";
+import { contributorBadgeData, syncReadmeCommunity } from "../../scripts/sync-readme-community.mjs";
 
 test("README community sync changes only its marked block and is stable", () => {
   const source = [
@@ -30,4 +30,10 @@ test("README community sync changes only its marked block and is stable", () => 
   assert.match(updated, /\[@alice\]\(https:\/\/huggingface\.co\/alice\) \| 2 \| 3/u);
   assert.match(updated, /`pi-default`/u);
   assert.equal(syncReadmeCommunity(updated, community), updated);
+});
+
+test("contributors badge counts data contributors plus the project author", () => {
+  assert.deepEqual(contributorBadgeData({ contributors: [{}, {}, {}, {}, {}] }), {
+    contributors: 6,
+  });
 });
