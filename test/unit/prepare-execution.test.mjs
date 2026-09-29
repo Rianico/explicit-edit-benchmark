@@ -59,6 +59,25 @@ for (const provider of ["opencode-go", "opencode"]) {
   });
 }
 
+test("Pi receives the trusted GPT-6.1 Sol catalog seed", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "execution-route-"));
+  await runtime(root, "pi-default");
+  const args = await prepareExecution({
+    plan: {
+      adapter: "pi-default",
+      provider: "openai-codex",
+      model: "openai-codex/gpt-6.1-sol",
+      reasoning: "low",
+      packages: [{ role: "agent", version: "0.87.1" }],
+    },
+    credentialStore: credential,
+    runtime: root,
+    directory: path.join(root, "private"),
+  });
+  const models = JSON.parse(await readFile(args[args.indexOf("--model-file") + 1], "utf8"));
+  assert.equal(models.providers["openai-codex"].models[0].id, "gpt-6.1-sol");
+});
+
 for (const adapter of Object.keys(ADAPTERS)) {
   test(`${adapter} derives its private execution setup from the canonical registry`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "execution-route-"));

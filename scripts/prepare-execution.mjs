@@ -7,6 +7,41 @@ import { parseArgs } from "node:util";
 import { adapterDefinition } from "./adapter-registry.mjs";
 import { dshCredentialDocument } from "./export-pi-oauth-to-dsh.mjs";
 
+const PI_MODEL_SEEDS = Object.freeze({
+  "openai-codex/gpt-6.1-sol": {
+    providers: {
+      "openai-codex": {
+        baseUrl: "https://chatgpt.com/backend-api",
+        api: "openai-codex-responses",
+        models: [
+          {
+            id: "gpt-6.1-sol",
+            name: "GPT-6.1 Sol",
+            reasoning: true,
+            input: ["text", "image"],
+            contextWindow: 272000,
+            maxTokens: 128000,
+            thinkingLevelMap: {
+              off: "none",
+              minimal: "low",
+              low: "low",
+              medium: "medium",
+              high: "high",
+              xhigh: "xhigh",
+              max: "max",
+            },
+            compat: {
+              supportsOpenAIGrammarTools: true,
+              supportsAdditionalTools: true,
+              supportsToolSearch: true,
+              supportsMidConvoSystemMessages: true,
+            },
+          },
+        ],
+      },
+    },
+  },
+});
 const OMP_API_KEY_ENV = Object.freeze({
   deepseek: "DEEPSEEK_API_KEY",
   zai: "ZAI_API_KEY",
@@ -46,6 +81,11 @@ export async function prepareExecution({ plan, credentialStore, runtime, directo
     case "pi": {
       const auth = await privateJson(path.join(directory, "pi-auth.json"), credentialStore);
       args.push("--auth-file", auth);
+      const modelSeed = PI_MODEL_SEEDS[plan.model];
+      if (modelSeed) {
+        const models = await privateJson(path.join(directory, "pi-models.json"), modelSeed);
+        args.push("--model-file", models);
+      }
       if (adapter.extensionPackage) {
         args.push(
           "--ide-package",
