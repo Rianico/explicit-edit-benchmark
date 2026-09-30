@@ -19,6 +19,9 @@ const TABLES = ["profiles", "configurations", "trials", "rounds", "tool-calls"];
 const DEFAULT_EXCLUSIONS = fileURLToPath(
   new URL("../policies/exclusions/v1.json", import.meta.url),
 );
+const DEFAULT_HISTORICAL_CONTRIBUTORS = fileURLToPath(
+  new URL("../policies/historical-contributors.json", import.meta.url),
+);
 
 function withRunId(content, runId) {
   return (
@@ -96,7 +99,111 @@ export function modelLeaderboard(groups = {}, leaderboardRows = []) {
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 }
 
-function datasetCard({ includeSubmissions = false, models = [] } = {}) {
+/** Add submitters that are confirmed by historical Hugging Face Dataset pull requests. */
+export function applyHistoricalContributorAttribution(runs, registry = {}) {
+  return runs.map((run) => {
+    if (run.submittedBy) return run;
+    const historical = registry[run.runId];
+    if (!historical) return run;
+    const { submissionUrl, ...submittedBy } = historical;
+    return { ...run, submittedBy, submissionUrl };
+  });
+}
+
+async function loadHistoricalContributorAttribution(file) {
+  return JSON.parse(await readFile(file, "utf8"));
+}
+
+/** Build stable contributor and harness tables from accepted run evidence. */
+export function datasetCommunityProjection(runs = [], profiles = []) {
+  const runProfiles = new Map();
+  for (const profile of profiles) {
+    const items = runProfiles.get(profile.runId) ?? [];
+    items.push(profile);
+    runProfiles.set(profile.runId, items);
+  }
+  const contributors = new Map();
+  const harnesses = new Map();
+  for (const run of runs) {
+    for (const profile of runProfiles.get(run.runId) ?? []) {
+      const harness = harnesses.get(profile.harnessFamily) ?? {
+        harnessFamily: profile.harnessFamily,
+        runs: new Set(),
+        configurations: new Set(),
+      };
+      harness.runs.add(run.runId);
+      harness.configurations.add(profile.configurationHash);
+      harnesses.set(profile.harnessFamily, harness);
+    }
+    const identity = run.submittedBy;
+    if (!identity?.accountId || !identity.profileUrl) continue;
+    const key = `${identity.platform}	${identity.accountId}`;
+    const contributor = contributors.get(key) ?? {
+      ...identity,
+      runs: new Set(),
+      configurations: new Set(),
+    };
+    contributor.runs.add(run.runId);
+    for (const profile of runProfiles.get(run.runId) ?? [])
+      contributor.configurations.add(profile.configurationHash);
+    contributors.set(key, contributor);
+  }
+  return {
+    contributors: [...contributors.values()]
+      .map(({ runs, configurations, ...identity }) => ({
+        ...identity,
+        acceptedRuns: runs.size,
+        configurations: configurations.size,
+      }))
+      .sort((a, b) => a.accountId.localeCompare(b.accountId)),
+    harnesses: [...harnesses.values()]
+      .map(({ runs, configurations, ...identity }) => ({
+        ...identity,
+        acceptedRuns: runs.size,
+        configurations: configurations.size,
+      }))
+      .sort((a, b) => a.harnessFamily.localeCompare(b.harnessFamily)),
+  };
+}
+
+function communityCardSections(community) {
+  const lines = [];
+  if (community.contributors.length) {
+    lines.push(
+      "## Data contributors",
+      "",
+      "Thank you to everyone who has shared benchmark observations. Your work makes this public comparison possible.",
+      "",
+      "| Contributor | Accepted runs | Configurations |",
+      "| --- | ---: | ---: |",
+      ...community.contributors.map(
+        (row) =>
+          `| [@${row.accountId}](${row.profileUrl}) | ${row.acceptedRuns} | ${row.configurations} |`,
+      ),
+      "",
+    );
+  }
+  if (community.harnesses.length) {
+    lines.push(
+      "## Accepted harnesses",
+      "",
+      "| Harness | Accepted runs | Configurations |",
+      "| --- | ---: | ---: |",
+      ...community.harnesses.map(
+        (row) =>
+          `| [\`${row.harnessFamily}\`](https://huggingface.co/spaces/alexshpunt/benchmark-explorer?card=harness%3A${encodeURIComponent(row.harnessFamily)}%40latest) | ${row.acceptedRuns} | ${row.configurations} |`,
+      ),
+      "",
+    );
+  }
+  return lines;
+}
+
+function datasetCard({
+  includeSubmissions = false,
+  models = [],
+  community = { contributors: [], harnesses: [] },
+} = {}) {
   const tables = [
     ["profiles", "data/profiles/*.jsonl.gz"],
     ["configurations", "data/configurations/*.jsonl.gz"],
@@ -168,6 +275,7 @@ function datasetCard({ includeSubmissions = false, models = [] } = {}) {
           "",
         ]
       : []),
+    ...communityCardSections(community),
     "## Tables",
     "",
     "| Config | One row per |",
@@ -806,9 +914,15 @@ export async function buildDerivedDatasetFromAggregateState(
   const leaderboardContent = JSON.stringify(leaderboard, null, 2) + "\n";
   await writeFile(path.join(outputDirectory, "leaderboard.json"), leaderboardContent);
   index.leaderboard = fileRecord("leaderboard.json", leaderboardContent);
+  const community = datasetCommunityProjection(index.runs, evidence.profiles);
+  const communityContent = JSON.stringify({ schemaVersion: 1, ...community }, null, 2) + "\n";
+  await writeFile(path.join(outputDirectory, "community.json"), communityContent);
+  index.community = fileRecord("community.json", communityContent);
   const summary = {
     schemaVersion: 1,
     exclusions,
+    contributors: community.contributors.length,
+    harnesses: community.harnesses.length,
     ...summarizeTrials(evidence.trials),
     models: models.length,
     configurations: leaderboardRows.length,
@@ -831,7 +945,7 @@ export async function buildDerivedDatasetFromAggregateState(
   );
   await writeFile(
     path.join(outputDirectory, "README.md"),
-    datasetCard({ includeSubmissions: true, models }),
+    datasetCard({ includeSubmissions: true, models, community }),
   );
   return index;
 }
@@ -847,7 +961,10 @@ function fileRecord(filePath, content) {
 export async function buildPublicDatasetFromStore(
   outputDirectory,
   storeDirectory,
-  { exclusionRegistryFile = DEFAULT_EXCLUSIONS } = {},
+  {
+    exclusionRegistryFile = DEFAULT_EXCLUSIONS,
+    historicalContributorsFile = DEFAULT_HISTORICAL_CONTRIBUTORS,
+  } = {},
 ) {
   const store = path.resolve(storeDirectory);
   const sourceIndex = JSON.parse(await readFile(path.join(store, "index.json"), "utf8"));
@@ -894,6 +1011,9 @@ export async function buildPublicDatasetFromStore(
         ...run,
         submissionId: metadata.submissionId,
         ownerId: metadata.ownerId,
+        ...(metadata.submittedBy ? { submittedBy: metadata.submittedBy } : {}),
+        ...(metadata.sourceRepository ? { sourceRepository: metadata.sourceRepository } : {}),
+        ...(metadata.submissionUrl ? { submissionUrl: metadata.submissionUrl } : {}),
         purpose: metadata.purpose,
         // Bundles accepted before source verification existed are the trusted initial corpus.
         verification: metadata.verification ?? "verified",
@@ -901,6 +1021,10 @@ export async function buildPublicDatasetFromStore(
         ...(official ? { official } : {}),
       };
     }),
+  );
+  index.runs = applyHistoricalContributorAttribution(
+    index.runs,
+    await loadHistoricalContributorAttribution(historicalContributorsFile),
   );
   const trialGroups = await Promise.all(
     index.runs.map(async (run) => ({
@@ -1068,9 +1192,19 @@ export async function buildPublicDatasetFromStore(
     bytes: Buffer.byteLength(leaderboardContent),
     sha256: createHash("sha256").update(leaderboardContent).digest("hex"),
   };
+  const community = datasetCommunityProjection(index.runs, allProfiles);
+  const communityContent = JSON.stringify({ schemaVersion: 1, ...community }, null, 2) + "\n";
+  await writeFile(path.join(outputDirectory, "community.json"), communityContent);
+  index.community = {
+    path: "community.json",
+    bytes: Buffer.byteLength(communityContent),
+    sha256: createHash("sha256").update(communityContent).digest("hex"),
+  };
   const summary = {
     schemaVersion: 1,
     exclusions,
+    contributors: community.contributors.length,
+    harnesses: community.harnesses.length,
     ...summarizeTrials(allTrials),
     models: models.length,
     configurations: leaderboardRows.length,
@@ -1098,7 +1232,7 @@ export async function buildPublicDatasetFromStore(
   );
   await writeFile(
     path.join(outputDirectory, "README.md"),
-    datasetCard({ includeSubmissions: true, models }),
+    datasetCard({ includeSubmissions: true, models, community }),
   );
   return index;
 }
