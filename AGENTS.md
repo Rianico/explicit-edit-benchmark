@@ -25,6 +25,4 @@ Do nothing on your own initiative: no run, no commit, no publication until the u
 full observation spends real money, so confirm the scope before starting one, and prefer one task
 before the whole set.
 
-Before you commit, run the check the README describes. It is free, it is what CI runs, and it catches
-a missing seeded file, an adapter name that does not exist, and an identity literal written outside
-its module.
+Before you commit, run the check the README describes.
