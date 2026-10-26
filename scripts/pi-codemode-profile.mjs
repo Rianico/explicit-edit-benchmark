@@ -12,7 +12,6 @@ const requiredTools = [
   "delete",
   "copy",
   "move",
-  "select",
   "undo",
 ];
 

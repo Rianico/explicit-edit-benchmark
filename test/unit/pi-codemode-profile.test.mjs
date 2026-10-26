@@ -21,7 +21,6 @@ const profileTools = [
   "delete",
   "copy",
   "move",
-  "select",
   "undo",
 ];
 
